@@ -1,610 +1,1509 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
-<head>
+<html lang="zh-TW"><head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>手卡排版器 (A4八宮格 - 字元級切割與右側全編輯版)</title>
+    <title>手卡排版器 - 專業司儀 A7 八宮格排版工具</title>
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        :root {
-            --bg-color: #f1f5f9;
-            --panel-bg: #ffffff;
-            --border-color: #e2e8f0;
-            --text-main: #1e293b;
-            --a4-width: 210mm;
-            --a4-height: 297mm;
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap');
+
+        * {
+            box-sizing: border-box;
         }
 
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-
         body {
-            font-family: "Helvetica Neue", Helvetica, "PingFang TC", "LiHei Pro", "Microsoft JhengHei", sans-serif;
-            background-color: var(--bg-color);
-            color: var(--text-main);
+            font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #f1f5f9;
+            color: #1e293b;
+        }
+
+        /* 主容器：左右分欄可拖曳 */
+        .app-container {
+            display: flex;
+            width: 100vw;
             height: 100vh;
             overflow: hidden;
         }
 
-        .container {
-            display: grid;
-            grid-template-columns: 543px 8px 1fr;
-            height: 100vh;
-        }
-
-        .resizer {
-            background-color: #cbd5e1;
-            cursor: col-resize;
-            transition: background-color 0.2s;
+        .left-panel {
+            width: 42%;
+            min-width: 300px;
+            max-width: 75%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background-color: #ffffff;
+            border-right: 1px solid #cbd5e1;
             z-index: 10;
         }
 
-        .resizer:hover, .resizer:active { background-color: #64748b; }
-
-        /* 左側編輯區 */
-        .editor-panel {
-            background-color: var(--panel-bg);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            padding: 20px;
-            overflow: hidden;
-        }
-
-        .toolbar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-            gap: 10px;
-        }
-
-        .font-control {
+        .resizer {
+            width: 8px;
+            cursor: col-resize;
+            background-color: #e2e8f0;
             display: flex;
             align-items: center;
-            gap: 10px;
-            font-size: 14px;
-        }
-
-        textarea {
-            flex-grow: 1;
-            resize: none;
-            padding: 15px;
-            font-size: 16px;
-            line-height: 1.6;
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            outline: none;
-            font-family: inherit;
-        }
-
-        textarea:focus {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        button.primary-btn {
-            background-color: #3b82f6;
-            color: white;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 6px;
-            cursor: pointer;
-            font-weight: bold;
+            justify-content: center;
             transition: background-color 0.2s;
-        }
-
-        button.primary-btn:hover { background-color: #2563eb; }
-
-        .tips-box {
-            background-color: #eff6ff;
-            border: 1px solid #bfdbfe;
-            border-radius: 8px;
-            padding: 12px 15px;
-            margin-bottom: 15px;
-            font-size: 13px;
-            color: #1e3a8a;
-            flex-shrink: 0;
-        }
-        .tips-box p { margin-bottom: 6px; font-size: 14px; }
-        .tips-box ul { padding-left: 20px; display: flex; flex-direction: column; gap: 6px; margin: 0; }
-        .tips-box code { background: #dbeafe; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
-
-        /* 右側預覽區 */
-        .preview-panel {
-            padding: 30px;
-            overflow-y: auto;
-            background-color: #94a3b8;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 20px;
-        }
-
-        .a4-page {
-            width: var(--a4-width);
-            height: var(--a4-height);
-            background-color: white;
-            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            grid-template-rows: repeat(4, 1fr);
-            flex-shrink: 0;
-            padding: 0; 
-        }
-
-        .cue-card {
-            border-right: 1px dashed #cbd5e1;
-            border-bottom: 1px dashed #cbd5e1;
-            padding: 8mm; 
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-        }
-
-        .cue-card:nth-child(2n) { border-right: none; }
-        .cue-card:nth-child(7), .cue-card:nth-child(8) { border-bottom: none; }
-
-        /* 單張卡片字體微調工具列 */
-        .card-toolbar {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            display: none;
-            gap: 4px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 4px;
-            border-radius: 4px;
-            box-shadow: 0 1px 4px rgba(0,0,0,0.15);
-            z-index: 5;
-        }
-        .cue-card:hover .card-toolbar {
-            display: flex;
-        }
-        .card-toolbar button {
-            background-color: #f1f5f9;
-            border: 1px solid #cbd5e1;
-            color: #333;
-            cursor: pointer;
-            padding: 2px 6px;
-            font-size: 12px;
-            border-radius: 3px;
-        }
-        .card-toolbar button:hover { background-color: #e2e8f0; }
-
-        .card-content {
-            flex-grow: 1;
-            overflow: hidden;
-            line-height: 1.4; 
-            outline: none; 
-            word-break: break-all; /* 允許中文字元精準斷行 */
-        }
-
-        .card-content[contenteditable="true"]:focus {
-            background-color: rgba(255, 255, 255, 0.6);
-            box-shadow: inset 0 0 0 2px #3b82f6;
-            border-radius: 4px;
-        }
-
-        .card-footer {
-            text-align: right;
-            font-size: 10px;
-            color: #94a3b8;
-            margin-top: auto;
-            padding-top: 5px;
+            z-index: 20;
             user-select: none;
         }
 
-        /* 列印專用樣式 */
+        .resizer:hover, .resizer.dragging {
+            background-color: #3b82f6;
+        }
+
+        .resizer::after {
+            content: "⋮";
+            color: #64748b;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .resizer:hover::after, .resizer.dragging::after {
+            color: #ffffff;
+        }
+
+        .right-panel {
+            flex: 1;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            background-color: #e2e8f0;
+            overflow: hidden;
+        }
+
+        /* 預覽捲動區 */
+        #previewContainer {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: auto;
+            padding: 24px 16px 60px 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 28px;
+        }
+
+        /* A4 標準尺寸畫布 (210mm x 297mm) - 極大化可列印區域 */
+        .a4-page {
+            width: 210mm;
+            height: 297mm;
+            min-height: 297mm;
+            background: #ffffff;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.15), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+            padding: 4mm; /* 最小安全印表機邊距 */
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            grid-template-rows: repeat(4, 1fr);
+            border-radius: 2px;
+            position: relative;
+            flex-shrink: 0;
+        }
+
+        /* 單張 A7 手卡 */
+        .cue-card {
+            border: 0.5pt dashed #94a3b8;
+            padding: 4.5mm 5mm 5.5mm 5mm;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background-color: #ffffff;
+            transition: box-shadow 0.15s, background-color 0.15s;
+        }
+
+        .cue-card:hover {
+            background-color: #fafaf9;
+        }
+
+        .cue-card.active-card {
+            box-shadow: inset 0 0 0 2px #3b82f6;
+            background-color: #f8fafc;
+        }
+
+        /* 手卡內容編輯區 */
+        .card-content {
+            width: 100%;
+            height: 100%;
+            outline: none;
+            line-height: 1.42;
+            letter-spacing: 0.02em;
+            color: #0f172a;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+            overflow: hidden;
+            cursor: text;
+        }
+
+        /* 單元標題樣式（自動加粗與螢光筆） */
+        .unit-title-span {
+            display: inline;
+            border-radius: 3px;
+            padding: 0 2px;
+        }
+
+        .title-bold, .inline-bold {
+            font-weight: 700;
+        }
+
+        .title-highlight, .inline-highlight {
+            background-color: #fef08a;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* 右下角頁碼 (Card 1, Card 2...) */
+        .card-page-num {
+            position: absolute;
+            bottom: 1.5mm;
+            right: 3mm;
+            font-size: 11px;
+            font-weight: 700;
+            color: #475569;
+            pointer-events: none;
+            user-select: none;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            background-color: rgba(255, 255, 255, 0.85);
+            padding: 0 3px;
+            border-radius: 2px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+        }
+
+        /* 每張手卡右上角懸停微調工具列 */
+        .card-floating-toolbar {
+            position: absolute;
+            top: 3px;
+            right: 4px;
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            background: rgba(255, 255, 255, 0.96);
+            border: 1px solid #cbd5e1;
+            border-radius: 6px;
+            padding: 2px 4px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.15s ease;
+            z-index: 15;
+        }
+
+        .cue-card:hover .card-floating-toolbar,
+        .cue-card.active-card .card-floating-toolbar {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .mini-btn {
+            font-size: 11px;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 4px;
+            color: #334155;
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            cursor: pointer;
+            line-height: 1.3;
+            transition: all 0.12s;
+        }
+
+        .mini-btn:hover {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+
+        .mini-btn.active-style {
+            background: #dbeafe;
+            border-color: #93c5fd;
+            color: #1d4ed8;
+        }
+
+        /* 程序快速跳轉膠囊 */
+        .unit-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 9px;
+            font-size: 12px;
+            font-weight: 600;
+            border-radius: 9999px;
+            background-color: #f1f5f9;
+            color: #334155;
+            border: 1px solid #cbd5e1;
+            cursor: pointer;
+            white-space: nowrap;
+            transition: all 0.15s;
+        }
+
+        .unit-pill:hover {
+            background-color: #e0f2fe;
+            border-color: #7dd3fc;
+            color: #0369a1;
+        }
+
+        .unit-pill.active {
+            background-color: #2563eb;
+            border-color: #2563eb;
+            color: #ffffff;
+        }
+
+        /* 隱藏的字元測量沙盒（與 .card-content 尺寸完全一致） */
+        #measureSandbox {
+            position: fixed;
+            top: -9999px;
+            left: -9999px;
+            width: calc((210mm - 8mm) / 2);
+            height: calc((297mm - 8mm) / 4);
+            padding: 4.5mm 5mm 5.5mm 5mm;
+            visibility: hidden;
+            pointer-events: none;
+            z-index: -1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #measureContent {
+            width: 100%;
+            height: 100%;
+            line-height: 1.42;
+            letter-spacing: 0.02em;
+            word-break: break-word;
+            overflow-wrap: break-word;
+            white-space: pre-wrap;
+            overflow: hidden;
+        }
+
+        /* 專屬列印樣式 (@media print) */
         @media print {
-            @page { size: A4 portrait; margin: 0; }
-            body { background: none; }
-            .container { display: block; height: auto; overflow: visible; }
-            .editor-panel, .resizer, .tips-box, .card-toolbar { display: none !important; }
-            .preview-panel { padding: 0; background: none; gap: 0; overflow: visible; display: block; }
-            .a4-page { box-shadow: none; page-break-after: always; }
+            @page {
+                size: A4 portrait;
+                margin: 0;
+            }
+
+            html, body {
+                width: 210mm;
+                height: auto;
+                overflow: visible !important;
+                background: #ffffff !important;
+            }
+
+            .no-print,
+            .left-panel,
+            .resizer,
+            .right-toolbar,
+            .card-floating-toolbar {
+                display: none !important;
+            }
+
+            .app-container,
+            .right-panel,
+            #previewContainer {
+                display: block !important;
+                width: 100% !important;
+                height: auto !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: visible !important;
+                background: transparent !important;
+            }
+
+            .a4-page {
+                width: 210mm !important;
+                height: 297mm !important;
+                margin: 0 !important;
+                padding: 4mm !important;
+                box-shadow: none !important;
+                page-break-after: always;
+                break-after: page;
+            }
+
+            .a4-page:last-child {
+                page-break-after: auto;
+                break-after: auto;
+            }
+
+            .cue-card {
+                border: 0.5pt dashed #94a3b8 !important;
+                background-color: transparent !important;
+                box-shadow: none !important;
+            }
+
+            .cue-card.active-card {
+                background-color: transparent !important;
+                box-shadow: none !important;
+            }
+
+            .card-page-num {
+                color: #1e293b !important;
+                font-size: 11px !important;
+                font-weight: 700 !important;
+                background-color: transparent !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            .title-highlight, .inline-highlight {
+                background-color: #fef08a !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
         }
     </style>
-</head>
+<style>*, ::before, ::after{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }::backdrop{--tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:rgb(59 130 246 / 0.5);--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }/* ! tailwindcss v3.4.17 | MIT License | https://tailwindcss.com */*,::after,::before{box-sizing:border-box;border-width:0;border-style:solid;border-color:#e5e7eb}::after,::before{--tw-content:''}:host,html{line-height:1.5;-webkit-text-size-adjust:100%;-moz-tab-size:4;tab-size:4;font-family:ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";font-feature-settings:normal;font-variation-settings:normal;-webkit-tap-highlight-color:transparent}body{margin:0;line-height:inherit}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;font-feature-settings:normal;font-variation-settings:normal;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}button,input,optgroup,select,textarea{font-family:inherit;font-feature-settings:inherit;font-variation-settings:inherit;font-size:100%;font-weight:inherit;line-height:inherit;letter-spacing:inherit;color:inherit;margin:0;padding:0}button,select{text-transform:none}button,input:where([type=button]),input:where([type=reset]),input:where([type=submit]){-webkit-appearance:button;background-color:transparent;background-image:none}:-moz-focusring{outline:auto}:-moz-ui-invalid{box-shadow:none}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}blockquote,dd,dl,figure,h1,h2,h3,h4,h5,h6,hr,p,pre{margin:0}fieldset{margin:0;padding:0}legend{padding:0}menu,ol,ul{list-style:none;margin:0;padding:0}dialog{padding:0}textarea{resize:vertical}input::placeholder,textarea::placeholder{opacity:1;color:#9ca3af}[role=button],button{cursor:pointer}:disabled{cursor:default}audio,canvas,embed,iframe,img,object,svg,video{display:block;vertical-align:middle}img,video{max-width:100%;height:auto}[hidden]:where(:not([hidden=until-found])){display:none}.z-10{z-index:10}.mx-1{margin-left:0.25rem;margin-right:0.25rem}.mx-4{margin-left:1rem;margin-right:1rem}.mx-0\.5{margin-left:0.125rem;margin-right:0.125rem}.mb-1{margin-bottom:0.25rem}.mr-1{margin-right:0.25rem}.mt-3{margin-top:0.75rem}.flex{display:flex}.h-4{height:1rem}.min-h-0{min-height:0px}.w-12{width:3rem}.w-24{width:6rem}.w-full{width:100%}.w-px{width:1px}.flex-1{flex:1 1 0%}.cursor-pointer{cursor:pointer}.resize-none{resize:none}.list-inside{list-style-position:inside}.list-disc{list-style-type:disc}.flex-col{flex-direction:column}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.justify-between{justify-content:space-between}.gap-1{gap:0.25rem}.gap-1\.5{gap:0.375rem}.gap-2{gap:0.5rem}.space-y-1 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.25rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.25rem * var(--tw-space-y-reverse))}.space-y-1\.5 > :not([hidden]) ~ :not([hidden]){--tw-space-y-reverse:0;margin-top:calc(0.375rem * calc(1 - var(--tw-space-y-reverse)));margin-bottom:calc(0.375rem * var(--tw-space-y-reverse))}.overflow-x-auto{overflow-x:auto}.whitespace-nowrap{white-space:nowrap}.rounded{border-radius:0.25rem}.rounded-full{border-radius:9999px}.rounded-lg{border-radius:0.5rem}.border{border-width:1px}.border-b{border-bottom-width:1px}.border-t{border-top-width:1px}.border-amber-300{--tw-border-opacity:1;border-color:rgb(252 211 77 / var(--tw-border-opacity, 1))}.border-blue-200{--tw-border-opacity:1;border-color:rgb(191 219 254 / var(--tw-border-opacity, 1))}.border-blue-300{--tw-border-opacity:1;border-color:rgb(147 197 253 / var(--tw-border-opacity, 1))}.border-slate-200{--tw-border-opacity:1;border-color:rgb(226 232 240 / var(--tw-border-opacity, 1))}.border-slate-300{--tw-border-opacity:1;border-color:rgb(203 213 225 / var(--tw-border-opacity, 1))}.bg-blue-100{--tw-bg-opacity:1;background-color:rgb(219 234 254 / var(--tw-bg-opacity, 1))}.bg-blue-50{--tw-bg-opacity:1;background-color:rgb(239 246 255 / var(--tw-bg-opacity, 1))}.bg-blue-50\/90{background-color:rgb(239 246 255 / 0.9)}.bg-blue-600{--tw-bg-opacity:1;background-color:rgb(37 99 235 / var(--tw-bg-opacity, 1))}.bg-slate-100{--tw-bg-opacity:1;background-color:rgb(241 245 249 / var(--tw-bg-opacity, 1))}.bg-slate-200{--tw-bg-opacity:1;background-color:rgb(226 232 240 / var(--tw-bg-opacity, 1))}.bg-slate-300{--tw-bg-opacity:1;background-color:rgb(203 213 225 / var(--tw-bg-opacity, 1))}.bg-slate-50{--tw-bg-opacity:1;background-color:rgb(248 250 252 / var(--tw-bg-opacity, 1))}.bg-white{--tw-bg-opacity:1;background-color:rgb(255 255 255 / var(--tw-bg-opacity, 1))}.bg-yellow-100{--tw-bg-opacity:1;background-color:rgb(254 249 195 / var(--tw-bg-opacity, 1))}.p-3{padding:0.75rem}.p-3\.5{padding:0.875rem}.px-1{padding-left:0.25rem;padding-right:0.25rem}.px-2{padding-left:0.5rem;padding-right:0.5rem}.px-2\.5{padding-left:0.625rem;padding-right:0.625rem}.px-4{padding-left:1rem;padding-right:1rem}.px-5{padding-left:1.25rem;padding-right:1.25rem}.py-0\.5{padding-top:0.125rem;padding-bottom:0.125rem}.py-1{padding-top:0.25rem;padding-bottom:0.25rem}.py-2{padding-top:0.5rem;padding-bottom:0.5rem}.py-2\.5{padding-top:0.625rem;padding-bottom:0.625rem}.py-3{padding-top:0.75rem;padding-bottom:0.75rem}.px-0\.5{padding-left:0.125rem;padding-right:0.125rem}.pb-1{padding-bottom:0.25rem}.pb-1\.5{padding-bottom:0.375rem}.pt-2\.5{padding-top:0.625rem}.font-mono{font-family:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace}.text-base{font-size:1rem;line-height:1.5rem}.text-sm{font-size:0.875rem;line-height:1.25rem}.text-xl{font-size:1.25rem;line-height:1.75rem}.text-xs{font-size:0.75rem;line-height:1rem}.text-\[10px\]{font-size:10px}.font-black{font-weight:900}.font-bold{font-weight:700}.font-medium{font-weight:500}.font-normal{font-weight:400}.font-semibold{font-weight:600}.italic{font-style:italic}.leading-relaxed{line-height:1.625}.leading-tight{line-height:1.25}.text-blue-700{--tw-text-opacity:1;color:rgb(29 78 216 / var(--tw-text-opacity, 1))}.text-blue-800{--tw-text-opacity:1;color:rgb(30 64 175 / var(--tw-text-opacity, 1))}.text-blue-900{--tw-text-opacity:1;color:rgb(30 58 138 / var(--tw-text-opacity, 1))}.text-blue-900\/90{color:rgb(30 58 138 / 0.9)}.text-blue-950{--tw-text-opacity:1;color:rgb(23 37 84 / var(--tw-text-opacity, 1))}.text-slate-500{--tw-text-opacity:1;color:rgb(100 116 139 / var(--tw-text-opacity, 1))}.text-slate-600{--tw-text-opacity:1;color:rgb(71 85 105 / var(--tw-text-opacity, 1))}.text-slate-700{--tw-text-opacity:1;color:rgb(51 65 85 / var(--tw-text-opacity, 1))}.text-slate-800{--tw-text-opacity:1;color:rgb(30 41 59 / var(--tw-text-opacity, 1))}.text-white{--tw-text-opacity:1;color:rgb(255 255 255 / var(--tw-text-opacity, 1))}.text-slate-300{--tw-text-opacity:1;color:rgb(203 213 225 / var(--tw-text-opacity, 1))}.text-slate-400{--tw-text-opacity:1;color:rgb(148 163 184 / var(--tw-text-opacity, 1))}.accent-blue-600{accent-color:#2563eb}.opacity-75{opacity:0.75}.shadow-inner{--tw-shadow:inset 0 2px 4px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:inset 0 2px 4px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.shadow-sm{--tw-shadow:0 1px 2px 0 rgb(0 0 0 / 0.05);--tw-shadow-colored:0 1px 2px 0 var(--tw-shadow-color);box-shadow:var(--tw-ring-offset-shadow, 0 0 #0000), var(--tw-ring-shadow, 0 0 #0000), var(--tw-shadow)}.outline-none{outline:2px solid transparent;outline-offset:2px}.transition{transition-property:color, background-color, border-color, fill, stroke, opacity, box-shadow, transform, filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter;transition-property:color, background-color, border-color, text-decoration-color, fill, stroke, opacity, box-shadow, transform, filter, backdrop-filter, -webkit-text-decoration-color, -webkit-backdrop-filter;transition-timing-function:cubic-bezier(0.4, 0, 0.2, 1);transition-duration:150ms}.hover\:border-rose-300:hover{--tw-border-opacity:1;border-color:rgb(253 164 175 / var(--tw-border-opacity, 1))}.hover\:bg-blue-100:hover{--tw-bg-opacity:1;background-color:rgb(219 234 254 / var(--tw-bg-opacity, 1))}.hover\:bg-blue-700:hover{--tw-bg-opacity:1;background-color:rgb(29 78 216 / var(--tw-bg-opacity, 1))}.hover\:bg-rose-50:hover{--tw-bg-opacity:1;background-color:rgb(255 241 242 / var(--tw-bg-opacity, 1))}.hover\:bg-slate-200:hover{--tw-bg-opacity:1;background-color:rgb(226 232 240 / var(--tw-bg-opacity, 1))}.hover\:bg-slate-300:hover{--tw-bg-opacity:1;background-color:rgb(203 213 225 / var(--tw-bg-opacity, 1))}.hover\:bg-yellow-200:hover{--tw-bg-opacity:1;background-color:rgb(254 240 138 / var(--tw-bg-opacity, 1))}.hover\:text-rose-700:hover{--tw-text-opacity:1;color:rgb(190 18 60 / var(--tw-text-opacity, 1))}.focus\:border-blue-500:focus{--tw-border-opacity:1;border-color:rgb(59 130 246 / var(--tw-border-opacity, 1))}.focus\:ring-2:focus{--tw-ring-offset-shadow:var(--tw-ring-inset) 0 0 0 var(--tw-ring-offset-width) var(--tw-ring-offset-color);--tw-ring-shadow:var(--tw-ring-inset) 0 0 0 calc(2px + var(--tw-ring-offset-width)) var(--tw-ring-color);box-shadow:var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow, 0 0 #0000)}.focus\:ring-blue-200:focus{--tw-ring-opacity:1;--tw-ring-color:rgb(191 219 254 / var(--tw-ring-opacity, 1))}.active\:bg-blue-800:active{--tw-bg-opacity:1;background-color:rgb(30 64 175 / var(--tw-bg-opacity, 1))}</style></head>
 <body>
-    <div class="container" id="main-container">
-        <!-- 左側編輯區 -->
-        <div class="editor-panel">
-            <div class="toolbar">
-                <div class="font-control">
-                    <label for="fontSizeSlider">基礎字級：<span id="fontSizeDisplay">24</span>px</label>
-                    <input type="range" id="fontSizeSlider" min="16" max="36" value="24">
+
+    <!-- 隱藏測量沙盒：用於二元搜尋精準計算每張卡片可容納的字數 -->
+    <div id="measureSandbox" aria-hidden="true">
+        <div id="measureContent" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">●大合照</span>
+(請自行引導)</div>
+    </div>
+
+    <div class="app-container" id="appContainer">
+        <!-- 左側：文稿輸入與控制區 -->
+        <div class="left-panel no-print" id="leftPanel">
+            <!-- 頂部標題列 -->
+            <div class="px-4 py-3 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+                <div class="flex items-center gap-2">
+                    <span class="text-xl">🗂️</span>
+                    <div>
+                        <h1 class="text-base font-bold text-slate-800 leading-tight">手卡排版器</h1>
+                        <p class="text-xs text-slate-500">A4 八宮格 (A7) · 雙向即時同步</p>
+                    </div>
                 </div>
-                <button class="primary-btn" onclick="window.print()">列印 / 匯出 PDF</button>
+                <div class="flex items-center gap-2">
+                    <span id="cardCountBadge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-blue-100 text-blue-700">共 24 張手卡</span>
+                </div>
             </div>
-            
-            <div class="tips-box">
-                <p><strong>💡 使用者小撇步</strong></p>
-                <ul>
-                    <li>●程序名稱、［程序名稱］或 【單元名稱】，開頭的段落，會自動強制換一張新手卡。</li>
+
+            <!-- 💡 使用者小撇步 (依指定文字呈現) -->
+            <div class="mx-4 mt-3 p-3 rounded-lg bg-blue-50/90 border border-blue-200 text-xs text-blue-900 space-y-1.5 shadow-sm">
+                <div class="font-bold text-blue-800 flex items-center gap-1 text-sm">
+                    <span>💡 使用者小撇步</span>
+                </div>
+                <ul class="list-disc list-inside space-y-1 text-blue-900/90 leading-relaxed">
+                    <li><code class="bg-blue-100 px-1 py-0.5 rounded font-bold text-blue-950">●程序名稱</code>、<code class="bg-blue-100 px-1 py-0.5 rounded font-bold text-blue-950">［程序名稱］</code>或 <code class="bg-blue-100 px-1 py-0.5 rounded font-bold text-blue-950">【單元名稱】</code>，開頭的段落，會自動強制換一張新手卡。</li>
                     <li>右側預覽區的卡片可以直接點擊修改文字，修改內容會自動同步回左側輸入框。</li>
                     <li>點擊「列印 / 匯出 PDF」後會生成輔助裁切線，印出後十字對齊裁切即可。</li>
                 </ul>
             </div>
 
-            <textarea id="scriptInput" placeholder="請貼上講稿...">【原田會長賀詞】
-主持人A：大家好，首先為大家帶來原田會長的賀詞！
+            <!-- 📍 程序快速跳轉列 -->
+            <div class="px-4 pt-2.5 pb-1">
+                <div class="flex items-center justify-between mb-1">
+                    <span class="text-xs font-bold text-slate-500 flex items-center gap-1">
+                        📍 程序單元快速跳轉（點擊左右同步定位）：
+                    </span>
+                </div>
+                <div id="unitNavBar" class="flex items-center gap-1.5 overflow-x-auto pb-1.5 scrollbar-thin"><button type="button" class="unit-pill " data-card-index="1"><span>●注意事項、題目三唱</span><span class="opacity-75 font-mono text-[10px]">Card 1</span></button><button type="button" class="unit-pill " data-card-index="2"><span>【司儀開場】</span><span class="opacity-75 font-mono text-[10px]">Card 2</span></button><button type="button" class="unit-pill" data-card-index="4"><span>●致歡迎詞</span><span class="opacity-75 font-mono text-[10px]">Card 4</span></button><button type="button" class="unit-pill" data-card-index="6"><span>●頒贈禮物</span><span class="opacity-75 font-mono text-[10px]">Card 6</span></button><button type="button" class="unit-pill " data-card-index="10"><span>【唱名、頒贈禮物】</span><span class="opacity-75 font-mono text-[10px]">Card 10</span></button><button type="button" class="unit-pill " data-card-index="11"><span>●年度影片</span><span class="opacity-75 font-mono text-[10px]">Card 11</span></button><button type="button" class="unit-pill " data-card-index="13"><span>●地區聚光燈</span><span class="opacity-75 font-mono text-[10px]">Card 13</span></button><button type="button" class="unit-pill " data-card-index="14"><span>●「幸福 1+1」體驗（請依…</span><span class="opacity-75 font-mono text-[10px]">Card 14</span></button><button type="button" class="unit-pill " data-card-index="15"><span>【親子搭檔分享，於創價家族培…</span><span class="opacity-75 font-mono text-[10px]">Card 15</span></button><button type="button" class="unit-pill " data-card-index="16"><span>【達成折伏之會員與新入會會員…</span><span class="opacity-75 font-mono text-[10px]">Card 16</span></button><button type="button" class="unit-pill " data-card-index="18"><span>【長期陪伴、鼓勵夥伴（如久未…</span><span class="opacity-75 font-mono text-[10px]">Card 18</span></button><button type="button" class="unit-pill " data-card-index="19"><span>【以信心創造各項實證及挑戰弘…</span><span class="opacity-75 font-mono text-[10px]">Card 19</span></button><button type="button" class="unit-pill " data-card-index="20"><span>●總結</span><span class="opacity-75 font-mono text-[10px]">Card 20</span></button><button type="button" class="unit-pill " data-card-index="22"><span>●題目三唱</span><span class="opacity-75 font-mono text-[10px]">Card 22</span></button><button type="button" class="unit-pill " data-card-index="24"><span>●大合照</span><span class="opacity-75 font-mono text-[10px]">Card 24</span></button></div>
+            </div>
 
-［注意事項、題目三唱］
-司儀：大家(早/午/晚)安，歡迎大家前來參加○○地區友好總會！精彩節目即將開始，兩點注意事項在此提醒大家：
-1. 為使程序順利進行，請將手機調至震動或關機。
-2. 拍照時，請勿影響他人與程序進行。拍攝之照片或影片欲上傳，未經同意不可上傳含有可辨識當事人之照片。
-首先請___(職稱)___(姓名)帶領我們題目三唱。</textarea>
+            <!-- 司儀稿輸入框 -->
+            <div class="flex-1 px-4 py-2 flex flex-col min-h-0">
+                <textarea id="scriptInput" class="w-full flex-1 p-3.5 rounded-lg border border-slate-300 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none resize-none text-sm leading-relaxed text-slate-800 font-normal shadow-inner bg-white" placeholder="請在此貼上或輸入主持稿...">●注意事項
+各位貴賓您好，會議即將在五分鐘後開始，請將您的手機轉為震動或靜音模式。
+現場備有茶水與點心，歡迎自行取用。
+
+【司儀開場】
+主持人A：各位來賓、各位夥伴，大家早安！歡迎蒞臨今天的年度盛會。
+主持人B：這是3、4月份日本東京八王子滿枝綻放的櫻花，在春日藍天下展現生命的燦爛與自然之美。正如我們今年充滿希望與活力的嶄新起點！
+
+［程序名稱］
+接下來我們即將進入今天最受矚目的頒獎與分享環節，請大家以最熱烈的掌聲歡迎代表上台！
+
+【原田會長賀詞】
+在這個充滿意義的日子裡，謹向所有在各自崗位上持續奮鬥、展現溫暖光芒的朋友們，致上最誠摯的敬意與祝福。當我們懷抱堅定的信念向前邁進，每一步都將開創出嶄新的歷史篇章。讓我們攜手並肩，以最燦爛的笑容迎接未來的每一個挑戰，迎向充滿希望的明日！</textarea>
+            </div>
+
+            <!-- 左下底部操作列 -->
+            <div class="px-4 py-3 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-2">
+                <div class="flex items-center gap-2">
+                    <label for="globalFontSize" class="text-xs font-bold text-slate-700 whitespace-nowrap">預設字體：</label>
+                    <input type="range" id="globalFontSize" min="12" max="36" step="0.1" value="20.0" class="w-24 accent-blue-600 cursor-pointer">
+                    <span id="globalFontSizeVal" class="text-xs font-bold font-mono text-blue-700 w-12">13.7px</span>
+                    <button id="resetCardFontsBtn" type="button" title="將所有單張微調過的卡片字體重設為預設大小" class="text-xs px-2 py-1 rounded bg-slate-200 hover:bg-slate-300 text-slate-700 font-medium transition">
+                        重設單卡字級
+                    </button>
+                </div>
+
+                <button id="printBtn" type="button" class="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition cursor-pointer">
+                    <span>🖨️</span>
+                    <span>列印 / 匯出 PDF</span>
+                </button>
+            </div>
         </div>
 
-        <!-- 中間拖曳調整桿 -->
-        <div class="resizer" id="resizer"></div>
+        <!-- 中間：左右寬度拖曳分隔線 -->
+        <div class="resizer no-print" id="dragResizer" title="左右拖曳可調整編輯區與預覽區寬度"></div>
 
-        <!-- 右側預覽區 -->
-        <div class="preview-panel" id="previewContainer"></div>
+        <!-- 右側：A4 八宮格手卡即時預覽與直接編輯區 -->
+        <div class="right-panel" id="rightPanel">
+            <!-- 右上工具列（格式與螢光筆控制） -->
+            <div class="right-toolbar no-print px-5 py-2.5 bg-white border-b border-slate-300 flex flex-wrap items-center justify-between gap-2 shadow-sm z-10">
+                <div class="flex items-center gap-1.5 flex-wrap">
+                    <span class="text-xs font-bold text-slate-600 mr-1">標題與選取文字樣式：</span>
+
+                    <button id="btnToggleBold" type="button" class="px-2.5 py-1 rounded text-xs font-bold border border-slate-300 bg-slate-100 hover:bg-slate-200 text-slate-800 flex items-center gap-1 transition cursor-pointer" title="將反白文字或當前卡片標題切換粗體">
+                        <span class="font-black">B</span>
+                        <span>加粗 / 取消</span>
+                    </button>
+
+                    <button id="btnToggleHighlight" type="button" class="px-2.5 py-1 rounded text-xs font-bold border border-amber-300 bg-yellow-100 hover:bg-yellow-200 text-slate-800 flex items-center gap-1 transition cursor-pointer" title="將反白文字或當前卡片標題切換螢光筆底色">
+                        <span>🖍️</span>
+                        <span>螢光筆 / 取消</span>
+                    </button>
+
+                    <button id="btnClearFormatting" type="button" class="px-2.5 py-1 rounded text-xs font-semibold border border-slate-300 bg-white hover:bg-rose-50 hover:border-rose-300 hover:text-rose-700 text-slate-700 flex items-center gap-1 transition cursor-pointer" title="取消選取文字或當前手卡標題的加粗及螢光筆">
+                        <span>🧹</span>
+                        <span>取消加粗及螢光筆</span>
+                    </button>
+
+                    <div class="h-4 w-px bg-slate-300 mx-1"></div>
+
+                    <button id="btnGlobalAutoStyle" type="button" class="px-2.5 py-1 rounded text-xs font-semibold border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition cursor-pointer" title="一鍵切換全篇所有 ●、［］、【】 標題的預設加粗與螢光筆">
+                        ✨ 全部標題預設凸顯：開啟中
+                    </button>
+                </div>
+
+                <div class="text-xs text-slate-500 flex items-center gap-2">
+                    <span>💡 滑鼠移至卡片右上角可單獨調字級 (<code class="font-bold text-slate-700">A-</code> / <code class="font-bold text-slate-700">A+</code>)</span>
+                </div>
+            </div>
+
+            <!-- A4 畫布預覽容器 -->
+            <div id="previewContainer"><div class="a4-page"><div class="cue-card " data-card-index="1"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="1" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">●注意事項、題目三唱 </span>
+司儀：大家(早/午/晚)安，歡迎大家前來參加○○地區友好總會！精彩節目即將開始，兩點注意事項在此提醒大家：
+1. 為使程序順利進行，請將手機調至震動或關機。
+2. 拍照時，請勿影響他人與程序進行。拍攝之照片或影片如欲上傳網路平臺，請注意未經當事人同意，不可將含有可辨識當事人之照片或影片上傳。
+以上感謝大家的配合。
+首先請_______(職稱)_______(姓名)先生/女士帶領我們題目三唱。</div><div class="card-page-num">Card 1</div></div><div class="cue-card " data-card-index="2"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="2" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">【司儀開場】</span>
+主持人A+B：大家好！
+主持人A：歡迎來到○○地區友好總會，我是今天的主持人○○○。
+主持人B：我是○○○，今天一進來看到好多熟面孔，還有很多第一次來的新朋友，大家聚在一起的感覺，真的超級熱鬧的啦！
+主持人A：對呀！不知道大家剛剛進來的時候，有沒有到我們特別佈置的互動區逛逛、拍拍照呢？（▲有！）
+主持人B：今年的總會，我們特別準備了一點小驚喜，這次特別規劃了_____________（簡單介紹互動區），就是希望讓大家一進到會館，就感受到我們滿滿的熱情</div><div class="card-page-num">Card 2</div></div><div class="cue-card " data-card-index="3"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="3" style="font-size: 13.7px;">與用心。
+主持人A：沒錯！大家剛剛在互動區，都有加入創價的LINE官方帳號嗎？（▲有！）還來不及加入也沒關係，我們在螢幕上幫大家準備了創價的LINE官方帳號QR Code（▲投影QR Code之PPT），大家可以拿起手機掃描加入，隨時掌握我們的幸福資訊喔！（▲請稍等參加人員掃描加入）
+主持人B：謝謝大家！為了讓今天的總會有個最棒的開始，首先邀請最可愛、活潑的未來部小朋友們，帶來活力四射的演出。
+主持人A+B：讓我們用最熱情的掌聲來歡迎他們！</div><div class="card-page-num">Card 3</div></div><div class="cue-card" data-card-index="4"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="4" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">●致歡迎詞 </span>
+主持人B：大家說，剛剛的表演精不精彩？（▲精彩！）讓我們用最熱烈的掌聲，再次謝謝這群最可愛的小朋友們！
+主持人A：接下來的節目太令人期待了，還有什麼精彩的內容要帶給大家呢？
+主持人B：帶著這份滿滿的活力，我們馬上要來迎接新年度的嶄新出發啦！今天我們_______地區的大家長也特別盛裝打扮，迫不及待要來跟大家見面了。
+主持人A：讓我們掌聲歡迎最堅強、可靠的○○地區黃金柱，地區部長_______先生。
+主持人B：以及最明朗、溫暖的地區太陽，地區婦人部</div><div class="card-page-num">Card 4</div></div><div class="cue-card active-card" data-card-index="5"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="5" style="font-size: 13.7px;">長_______女士為大家致歡迎詞。
+主持人A+B：</div><div class="card-page-num">Card 5</div></div><div class="cue-card" data-card-index="6"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="6" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">●頒贈禮物 </span>
+主持人A：今年舉辦了很多精彩又豐富的活動，學會能不斷擴展幸福與和平的網絡，一切都要歸功於會員無私的付出哦。
+主持人B：尤其每個月到聚點參加座談會，都能感受到屋主的熱情與用心，大家說是不是啊（▲是！）。
+主持人A：為了感謝無私的活動聚點提供者，學會特別以國際創價學會會長，也是知名攝影家－池田大作先生的攝影作品，製作成深具意義的年曆來贈送給聚點提供者。
+主持人B：每幅作品都是池田先生用心將他對生命、對大自然的熱愛，所記錄下的景物。</div><div class="card-page-num">Card 6</div></div><div class="cue-card " data-card-index="7"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="7" style="font-size: 13.7px;">主持人A：（▲投影年曆之PPT）這是1、2月份英國・倫敦著名的歷史建築，作品中飄揚的各國旗幟，象徵世界和平的願景。
+主持人B：這是3、4月份日本東京八王子滿枝綻放的櫻花，在春日藍天下展現生命的燦爛與自然之美。
+主持人A：這是5、6月份日本・福島的湖畔，青山環抱碧藍湖水與層層綠意交織，呈現出大自然的生命力。
+主持人B：這是7、8月份 美國・夏威夷的沙灘，海花拍打著金色沙灘，人們自在的享受陽光與海洋，洋溢著夏日的活力。
+主持人A：這是9、10月份法國・比耶夫雷的市集，色彩繽紛的蔬果陳列於架上，感受當地民眾生活的風情。</div><div class="card-page-num">Card 7</div></div><div class="cue-card " data-card-index="8"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="8" style="font-size: 13.7px;">主持人B：這是11、12月份東京・八王子的夕陽，遠山層疊映襯靜謐的橘紅暮色，令人感受到大自然的深遠寧靜。（▲可視活動流程需要，擇其中2-3頁PPT介紹即可）</div><div class="card-page-num">Card 8</div></div></div><div class="a4-page"><div class="cue-card " data-card-index="9"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="9" style="font-size: 13.7px;">主持人A：哇！每一張都很漂亮耶！
+主持人B：除了年曆裡的世界美景，其實還有一道最美麗的風景喔。
+主持人A：沒錯！那就是每一次屋主為大家敞開家門時，那無私奉獻的笑容跟熱情！
+主持人B：為了把這份感謝傳達給大家，現在我們請_______(職稱)_______(姓名）先生/女士代表學會頒贈。
+主持人A：接著，讓我們邀請聚點提供者依唱名順序上台。</div><div class="card-page-num">Card 9</div></div><div class="cue-card " data-card-index="10"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="10" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">【唱名、頒贈禮物】</span>
+主持人B：請大家面對前方的攝影鏡頭，露出您最燦爛的笑容。3.2.1.謝謝大家。
+主持人A：請前輩及受獎者依服務人員引導回座。</div><div class="card-page-num">Card 10</div></div><div class="cue-card " data-card-index="11"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="11" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">●年度影片</span>
+主持人A：回顧今年，大家應該都過得超級充實吧？除了我們每個月參加的各項活動外，還有深獲外界好評的青年團隊演出、藝文展覽及創價公演！
+主持人B：對呀！最特別的是，學會推廣防災士培訓，今年國慶日還首度受邀參加遊行耶！展現了創價致力推動永續、守護社區的團結力量。
+主持人A：沒錯！而且不只這樣喔，今年創價在亞太永續博覽會的展出，也獲得了外界大大的肯定哦！
+主持人B：大家是不是也跟我們一樣，覺得今年真的很精彩呢？（▲是！）
+主持人A：一時之間無法細數每一個感動時刻，所以我們</div><div class="card-page-num">Card 11</div></div><div class="cue-card " data-card-index="12"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="12" style="font-size: 13.7px;">特別把這些精彩畫面，濃縮成了一支年度影片喔！事不宜遲，我們趕快來觀賞吧！
+主持人A+B：請觀賞！</div><div class="card-page-num">Card 12</div></div><div class="cue-card " data-card-index="13"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="13" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">●地區聚光燈</span>
+主持人A：看完影片，大家是不是跟我一樣，已經開始期待明年的活動了呢？
+主持人B：別急別急！今天的總會還有亮點喔！我們還特別規劃了『地區聚光燈』這個全新單元。
+主持人A：沒錯！這可是特別為了讓大家_______________________________(▲請依內容填寫)，所準備的特別節目！
+主持人B：馬上把時間交給ＯＯ部的ＯＯＯ，來為我們帶來_______________。
+主持人A+B：請掌聲歡迎。</div><div class="card-page-num">Card 13</div></div><div class="cue-card " data-card-index="14"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="14" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">●「幸福 1+1」體驗（請依據發表內容選擇司儀稿版本）</span></div><div class="card-page-num">Card 14</div></div><div class="cue-card " data-card-index="15"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="15" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">【親子搭檔分享，於創價家族培育後繼之體驗】</span>
+主持人A：回想我自己從小到大，都是在家人的鼓勵下開始參加活動的。
+主持人B：我也是！在成長過程中，無論遇到____________（可依實際情形，簡單分享受到家人的鼓勵與陪伴，因而開始信仰、發心或創造勝利體驗的過程），家人總是陪伴著我們一起用信心去挑戰！
+主持人A：今天我們也很高興邀請到________與_________一家人，來跟我們分享幸福 1+1 的體驗。
+主持人A+B：請大家用最熱烈的掌聲歡迎他們！</div><div class="card-page-num">Card 15</div></div><div class="cue-card " data-card-index="16"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="16" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">【達成折伏之會員與新入會會員共同分享，以信心創造各項實證、相互鼓勵的感人體驗】</span>
+主持人A：其實，信仰佛法的目的，就是為了讓自己及身邊的朋友都能獲得幸福！創價會員懷抱著這樣的一念，鼓勵了許多身邊的親朋好友。
+主持人B：沒錯，回想我當時______________________（可依實際情形，簡單分享自己鼓勵朋友、與友人展開對話的過程），深刻體會到，當我們真心為別人努力時，自己也會跟著幸福起來，而且充滿生命力！
+主持人A：今天我們特別邀請到________與________，來與我們分享他們幸福 1+1的共戰體驗。</div><div class="card-page-num">Card 16</div></div></div><div class="a4-page"><div class="cue-card " data-card-index="17"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="17" style="font-size: 13.7px;">主持人A+B：請大家用最熱烈的掌聲歡迎他們！</div><div class="card-page-num">Card 17</div></div><div class="cue-card " data-card-index="18"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="18" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">【長期陪伴、鼓勵夥伴（如久未活動之會員），一起共戰之培育體驗】</span>
+主持人A：在人生的路上難免會遇到低潮，每當想放棄的時候，還好身邊都有前輩跟夥伴陪我們一起前進！
+主持人B：對呀，回想我當時_____________（可依實際情形，簡單分享被陪伴或鼓勵別人的感動），讓我體會到，一個人的真心是能撼動人心的！
+主持人A：今天我們特別邀請到_________，來跟我們分享這段感人的培育體驗。
+主持人A+B：請掌聲歡迎。</div><div class="card-page-num">Card 18</div></div><div class="cue-card " data-card-index="19"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="19" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">【以信心創造各項實證及挑戰弘教擴大的勝利體驗】</span>
+主持人A：信仰最棒的地方，就是給了我們跨出舒適圈、不斷前進的勇氣。
+主持人B：真的！像我今年初，也給自己立下了要挑戰_______________的目標(可依實際情形，簡單分享今年創造的體驗，或是今年立下目標開始挑戰的目標)。在過程中透過唱題湧現智慧，不逃避困難，真的覺得有信心真好！
+主持人A：今天我們特別邀請到_________，來分享他兼顧信心與生活，創造勝利實證的體驗！
+主持人A+B：請掌聲歡迎。</div><div class="card-page-num">Card 19</div></div><div class="cue-card " data-card-index="20"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="20" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">●總結</span>
+主持人A：哇，謝謝 __________________ 這麼棒的分享！讓我們再給他/他們一個熱烈的掌聲！
+主持人B：聽完真的覺得好感動喔，我也決意要_______________（簡單分享自己的新目標與決意），在新的一年好好挑戰，創造自己的勝利實證！
+主持人A：哇～太棒了！我也要__________（簡單分享自身決意）。
+主持人B：相信在座的大家，都跟我們一樣在心裡立下了新的目標，準備在新的一年創造屬於自己的勝利劇！
+主持人A：迎向嶄新的 2027 年，就讓我們一起勇躍前進！最後請______(職稱)_______(姓名)先生/女士，為</div><div class="card-page-num">Card 20</div></div><div class="cue-card " data-card-index="21"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="21" style="font-size: 13.7px;">我們帶來今天的總結。
+主持人A+B：請掌聲歡迎。</div><div class="card-page-num">Card 21</div></div><div class="cue-card " data-card-index="22"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="22" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">●題目三唱</span>
+主持人A：再次掌聲謝謝_______(職稱)_______(姓名)先生/女士 溫暖的鼓勵。
+主持人B：今天的總會不知不覺就到了尾聲啦！希望大家都收穫滿滿。
+主持人A：池田先生鼓勵：「要全力面對眼前的課題、奮戰的目標，贏得一次又一次的勝利，這樣就能夠一個個地超越苦惱，提升自身的境界。」今後不管遇到什麼樣的挑戰，我們都要以堅強的信心，勇躍前進！大家說好嗎？（▲好！）
+主持人B：今天的○○地區友好總會到此圓滿結束！感謝大家的參與。</div><div class="card-page-num">Card 22</div></div><div class="cue-card " data-card-index="23"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="23" style="font-size: 13.7px;">主持人A：我們所在的_____會館___樓設有藝文中心，正在舉辦非常優質的________（展），非常推薦大家前往參觀。（依各會館狀況傳達）
+主持人B：回程路上請注意交通安全，也請記得將手機打開，以利會後家人聯絡。
+主持人A：待會題目三唱之後，請大家先別急著離開，我們一起留下一張最珍貴的大合照！
+主持人B：最後請_______(職稱)_______(姓名)先生/女士帶領我們題目三唱。同時也預告一下我們將在＿＿＿舉辦新年勤行會，也歡迎大家共襄盛舉（▲已訂定時間者再介紹），期待明年再見！
+主持人A+B：謝謝大家！</div><div class="card-page-num">Card 23</div></div><div class="cue-card " data-card-index="24"><div class="card-floating-toolbar no-print">
+                    <button type="button" class="mini-btn active-style" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn active-style" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">13.7</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                </div><div class="card-content" contenteditable="true" spellcheck="false" data-card-index="24" style="font-size: 13.7px;"><span class="unit-title-span title-bold title-highlight" data-unit-title="true">●大合照</span>
+(請自行引導)</div><div class="card-page-num">Card 24</div></div></div></div>
+        </div>
     </div>
 
     <script>
+        // ==== DOM 元素參照 ====
+        const appContainer = document.getElementById('appContainer');
+        const leftPanel = document.getElementById('leftPanel');
+        const dragResizer = document.getElementById('dragResizer');
         const inputArea = document.getElementById('scriptInput');
         const previewContainer = document.getElementById('previewContainer');
-        const fontSizeSlider = document.getElementById('fontSizeSlider');
-        const fontSizeDisplay = document.getElementById('fontSizeDisplay');
-        const mainContainer = document.getElementById('main-container');
-        const resizer = document.getElementById('resizer');
+        const measureContent = document.getElementById('measureContent');
+        const unitNavBar = document.getElementById('unitNavBar');
+        const cardCountBadge = document.getElementById('cardCountBadge');
 
-        // ==== 面板寬度拖曳邏輯 ====
-        let isResizing = false;
-        resizer.addEventListener('mousedown', (e) => {
-            isResizing = true;
-            document.body.style.cursor = 'col-resize';
-            e.preventDefault(); 
-        });
-        document.addEventListener('mousemove', (e) => {
-            if (!isResizing) return;
-            const containerRect = mainContainer.getBoundingClientRect();
-            let newLeftWidth = e.clientX - containerRect.left;
-            if (newLeftWidth < 200) newLeftWidth = 200;
-            if (newLeftWidth > containerRect.width - 300) newLeftWidth = containerRect.width - 300;
-            mainContainer.style.gridTemplateColumns = `${newLeftWidth}px 8px 1fr`;
-        });
-        document.addEventListener('mouseup', () => {
-            if (isResizing) {
-                isResizing = false;
-                document.body.style.cursor = 'default';
-            }
-        });
+        const globalFontSizeInput = document.getElementById('globalFontSize');
+        const globalFontSizeVal = document.getElementById('globalFontSizeVal');
+        const resetCardFontsBtn = document.getElementById('resetCardFontsBtn');
+        const printBtn = document.getElementById('printBtn');
 
-        // ==== 排版狀態管理 ====
-        let baseFontSize = 24;
-        let customFontSizes = {}; // 紀錄每張卡片專屬的字體大小
+        const btnToggleBold = document.getElementById('btnToggleBold');
+        const btnToggleHighlight = document.getElementById('btnToggleHighlight');
+        const btnClearFormatting = document.getElementById('btnClearFormatting');
+        const btnGlobalAutoStyle = document.getElementById('btnGlobalAutoStyle');
 
-        fontSizeSlider.addEventListener('input', () => {
-            baseFontSize = parseInt(fontSizeSlider.value);
-            fontSizeDisplay.textContent = baseFontSize;
-            // 清除個別覆寫設定，統一字體
-            customFontSizes = {};
-            renderCards();
-        });
+        // ==== 核心狀態管理 ====
+        let baseFontSize = 20.0;
+        let customFontSizes = {};      // 各張手卡獨立字級 { cardIndex: fontSize (float) }
+        let cardTitleStyleMap = {};    // 各張手卡標題個別樣式覆寫 { cardIndex: { bold: bool, highlight: bool } }
+        let inlineStyledRanges = {};   // 儲存卡片內自訂局部樣式
+        let autoTitleBold = true;      // 全域預設：單元標題自動加粗
+        let autoTitleHighlight = true; // 全域預設：單元標題自動螢光筆
+        let activeCardIndex = 1;       // 當前聚焦的手卡編號 (1-based)
+        let cardStartOffsets = {};     // 每張手卡對應左側全文的起始字元位置 { cardIndex: charOffset }
+        let isComposingIME = false;    // 中文輸入法組字鎖定保護
 
-        inputArea.addEventListener('input', () => renderCards());
-
-        // ==== DOM 文字與游標輔助函式 ====
-        
-        // 取得單一 DOM 節點下的純文字長度 (包含將 <br> 視為 \n, 長度為 1)
-        function getElementTextLength(element) {
-            let len = 0;
-            function traverse(n) {
-                if (n.nodeType === 3) len += n.textContent.length;
-                else if (n.nodeName === 'BR') len += 1;
-                else for (let child of n.childNodes) traverse(child);
-            }
-            traverse(element);
-            return len;
+        // 格式化字體大小為小數點後 1 位 (例如 20.0)
+        function formatFontSize(size) {
+            return Number(size).toFixed(1);
         }
 
-        // 遞迴提取卡片內的純文字
-        function extractText(element) {
+        // ==== 1. 左右分欄寬度自由拖曳 ====
+        let isResizing = false;
+
+        dragResizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            dragResizer.classList.add('dragging');
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+            e.preventDefault();
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const containerRect = appContainer.getBoundingClientRect();
+            let newLeftWidth = ((e.clientX - containerRect.left) / containerRect.width) * 100;
+            newLeftWidth = Math.max(22, Math.min(72, newLeftWidth));
+            leftPanel.style.width = `${newLeftWidth}%`;
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                dragResizer.classList.remove('dragging');
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        });
+
+        // ==== 2. 判斷是否為單元標題行 (●, ［, [, 【) ====
+        function isUnitTitleLine(lineText) {
+            if (!lineText) return false;
+            const trimmed = lineText.trimStart();
+            return (
+                trimmed.startsWith('●') ||
+                trimmed.startsWith('［') ||
+                trimmed.startsWith('[') ||
+                trimmed.startsWith('【')
+            );
+        }
+
+        // 取得某張卡片的標題樣式設定
+        function getCardTitleStyle(cardIdx) {
+            if (cardTitleStyleMap[cardIdx]) {
+                return cardTitleStyleMap[cardIdx];
+            }
+            return {
+                bold: autoTitleBold,
+                highlight: autoTitleHighlight
+            };
+        }
+
+        // 將卡片純文字渲染成帶有標題自動加粗/螢光筆的 HTML
+        function buildCardInnerHTML(cardText, cardIdx) {
+            if (!cardText) return '';
+            const lines = cardText.split('\n');
+            const firstLine = lines[0];
+
+            const escapeHTML = (str) =>
+                str
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;');
+
+            if (isUnitTitleLine(firstLine)) {
+                const styleObj = getCardTitleStyle(cardIdx);
+                const classes = ['unit-title-span'];
+                if (styleObj.bold) classes.push('title-bold');
+                if (styleObj.highlight) classes.push('title-highlight');
+
+                const restLines = lines.slice(1).map(escapeHTML).join('\n');
+                const firstLineHTML = `<span class="${classes.join(' ')}" data-unit-title="true">${escapeHTML(firstLine)}</span>`;
+                return restLines.length > 0 ? `${firstLineHTML}\n${restLines}` : firstLineHTML;
+            }
+
+            return escapeHTML(cardText);
+        }
+
+        // ==== 3. 隱藏沙盒高度溢出檢測 & 字元級二元搜尋 ====
+        function testTextOverflow(candidateText, fontSize, cardIdx) {
+            measureContent.style.fontSize = `${fontSize}px`;
+            measureContent.innerHTML = buildCardInnerHTML(candidateText, cardIdx);
+            return measureContent.scrollHeight > measureContent.clientHeight + 1;
+        }
+
+        function isElementOverflowing(el) {
+            return el.scrollHeight > el.clientHeight + 2;
+        }
+
+        // 利用二元搜尋找出當前手卡最多能塞入幾個字元 (Character-Level Smart Flow)
+        function findMaxFittingChars(existingText, newLineText, fontSize, cardIdx) {
+            const prefix = existingText ? existingText + '\n' : '';
+
+            // 先測試整行是否能直接塞入
+            const fullCandidate = prefix + newLineText;
+            if (!testTextOverflow(fullCandidate, fontSize, cardIdx)) {
+                return newLineText.length;
+            }
+
+            // 若原本已經有文字，且連加上新行的第 1 個字都會爆框，則新行 0 字可塞（整行推到下一張）
+            if (existingText && testTextOverflow(prefix + newLineText.slice(0, 1), fontSize, cardIdx)) {
+                return 0;
+            }
+
+            let low = 1;
+            let high = newLineText.length;
+            let best = 1;
+
+            while (low <= high) {
+                const mid = Math.floor((low + high) / 2);
+                const candidate = prefix + newLineText.slice(0, mid);
+                if (!testTextOverflow(candidate, fontSize, cardIdx)) {
+                    best = mid;
+                    low = mid + 1;
+                } else {
+                    high = mid - 1;
+                }
+            }
+            return best;
+        }
+
+        // ==== 4. DOM 純文字擷取與游標精準計算 ====
+        function extractTextFromCard(element) {
             let res = '';
-            if (element.nodeType === 3) res += element.textContent;
-            else if (element.nodeName === 'BR') res += '\n';
-            else for (let child of element.childNodes) res += extractText(child);
+            const childNodes = element.childNodes;
+            for (let i = 0; i < childNodes.length; i++) {
+                const child = childNodes[i];
+                if (child.nodeType === Node.TEXT_NODE) {
+                    res += child.textContent;
+                } else if (child.nodeName === 'BR') {
+                    res += '\n';
+                } else if (child.nodeName === 'DIV' || child.nodeName === 'P') {
+                    if (res.length > 0 && !res.endsWith('\n')) {
+                        res += '\n';
+                    }
+                    res += extractTextFromCard(child);
+                } else {
+                    res += extractTextFromCard(child);
+                }
+            }
             return res;
         }
 
-        // 計算 Selection 在指定卡片內的絕對 Offset
-        function getCursorOffsetInCard(card) {
-            let sel = window.getSelection();
-            if (!sel.rangeCount) return 0;
-            let range = sel.getRangeAt(0);
-            let offset = 0;
+        function getCursorOffsetInCard(cardElement) {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0) return 0;
+            const range = sel.getRangeAt(0);
+            const preRange = range.cloneRange();
+            preRange.selectNodeContents(cardElement);
+            preRange.setEnd(range.endContainer, range.endOffset);
+            return preRange.toString().length;
+        }
+
+        function setCursorInCard(cardElement, targetOffset) {
+            const sel = window.getSelection();
+            if (!sel) return;
+            const range = document.createRange();
+            let currentOffset = 0;
             let found = false;
-            
-            function traverse(n) {
+
+            function traverse(node) {
                 if (found) return;
-                if (n === range.startContainer) {
-                    if (n.nodeType === 3) {
-                        offset += range.startOffset;
+                if (node.nodeType === Node.TEXT_NODE) {
+                    const nextOffset = currentOffset + node.length;
+                    if (targetOffset <= nextOffset) {
+                        range.setStart(node, Math.max(0, targetOffset - currentOffset));
+                        range.collapse(true);
+                        found = true;
                     } else {
-                        for (let i = 0; i < range.startOffset; i++) {
-                            offset += getElementTextLength(n.childNodes[i]);
-                        }
+                        currentOffset = nextOffset;
                     }
-                    found = true;
-                    return;
-                }
-                if (n.nodeType === 3) offset += n.textContent.length;
-                else if (n.nodeName === 'BR') offset += 1;
-                else for (let child of n.childNodes) traverse(child);
-            }
-            traverse(card);
-            return offset;
-        }
-
-        // 在指定卡片的特定絕對 Offset 處放置游標
-        function setCursorInCard(card, targetOffset) {
-            let currentLen = 0;
-            let range = document.createRange();
-            let sel = window.getSelection();
-            let set = false;
-
-            function traverse(n) {
-                if (set) return;
-                if (n.nodeType === 3) {
-                    let nodeLen = n.textContent.length;
-                    if (targetOffset <= currentLen + nodeLen) {
-                        range.setStart(n, targetOffset - currentLen);
-                        range.collapse(true);
-                        set = true;
-                    }
-                    currentLen += nodeLen;
-                } else if (n.nodeName === 'BR') {
-                    if (targetOffset === currentLen) {
-                        range.setStartBefore(n);
-                        range.collapse(true);
-                        set = true;
-                    } else if (targetOffset === currentLen + 1) {
-                        range.setStartAfter(n);
-                        range.collapse(true);
-                        set = true;
-                    }
-                    currentLen += 1;
+                } else if (node.nodeName === 'BR') {
+                    currentOffset += 1;
                 } else {
-                    for (let child of n.childNodes) traverse(child);
+                    for (let i = 0; i < node.childNodes.length; i++) {
+                        traverse(node.childNodes[i]);
+                        if (found) return;
+                    }
                 }
             }
-            traverse(card);
-            
-            sel.removeAllRanges();
-            if (set) {
-                sel.addRange(range);
-            } else {
-                range.selectNodeContents(card);
+
+            traverse(cardElement);
+
+            if (!found) {
+                range.selectNodeContents(cardElement);
                 range.collapse(false);
-                sel.addRange(range);
-            }
-        }
-
-        // 偵測是否溢位
-        function isOverflow(element) {
-            return element.scrollHeight > element.clientHeight;
-        }
-
-        // ==== 排版核心演算法 (字元級二元搜尋) ====
-        function renderCards(cursorGlobalPos = null) {
-            const text = inputArea.value;
-            const lines = text.split('\n');
-            
-            previewContainer.innerHTML = '';
-            
-            let cardIndex = 0;
-            let currentPage = null;
-            let cardsOnPage = 0;
-
-            function createA4Page() {
-                const page = document.createElement('div');
-                page.className = 'a4-page';
-                previewContainer.appendChild(page);
-                return page;
             }
 
-            function createNewCard() {
-                if (cardsOnPage >= 8 || !currentPage) {
-                    currentPage = createA4Page();
-                    cardsOnPage = 0;
+            sel.removeAllRanges();
+            sel.addRange(range);
+        }
+
+        // ==== 5. 雙向捲動鎖定與導覽定位 ====
+        function lockScrollPositions(leftTop, rightTop) {
+            inputArea.scrollTop = leftTop;
+            previewContainer.scrollTop = rightTop;
+            requestAnimationFrame(() => {
+                inputArea.scrollTop = leftTop;
+                previewContainer.scrollTop = rightTop;
+            });
+        }
+
+        function scrollTextareaToCharOffset(charOffset) {
+            if (charOffset === undefined || charOffset === null) return;
+            const textBefore = inputArea.value.substring(0, charOffset);
+            const lineIndex = textBefore.split('\n').length - 1;
+            const totalLines = Math.max(1, inputArea.value.split('\n').length);
+            const targetScroll = Math.max(
+                0,
+                (lineIndex / totalLines) * inputArea.scrollHeight - inputArea.clientHeight * 0.22
+            );
+            inputArea.scrollTo({ top: targetScroll, behavior: 'smooth' });
+        }
+
+        function setActiveCardVisual(cardIdx, shouldScrollLeft = false) {
+            const savedRightScroll = previewContainer.scrollTop;
+            activeCardIndex = cardIdx;
+
+            document.querySelectorAll('.cue-card').forEach((c) => {
+                c.classList.toggle('active-card', parseInt(c.dataset.cardIndex, 10) === cardIdx);
+            });
+
+            document.querySelectorAll('.unit-pill').forEach((p) => {
+                p.classList.toggle('active', parseInt(p.dataset.cardIndex, 10) === cardIdx);
+            });
+
+            if (shouldScrollLeft && cardStartOffsets[cardIdx] !== undefined) {
+                scrollTextareaToCharOffset(cardStartOffsets[cardIdx]);
+            }
+            previewContainer.scrollTop = savedRightScroll;
+        }
+
+        // 建立左側上方的「程序快速跳轉列」
+        function renderUnitNavBar(detectedUnits) {
+            unitNavBar.innerHTML = '';
+            if (detectedUnits.length === 0) {
+                const emptyHint = document.createElement('span');
+                emptyHint.className = 'text-xs text-slate-400 italic';
+                emptyHint.textContent = '（輸入 ●、［］ 或 【】 標題即可自動生成章節導覽）';
+                unitNavBar.appendChild(emptyHint);
+                return;
+            }
+
+            detectedUnits.forEach((unit) => {
+                const pill = document.createElement('button');
+                pill.type = 'button';
+                pill.className = `unit-pill ${unit.cardIndex === activeCardIndex ? 'active' : ''}`;
+                pill.dataset.cardIndex = unit.cardIndex;
+
+                const shortTitle = unit.title.length > 14 ? unit.title.slice(0, 14) + '…' : unit.title;
+                pill.innerHTML = `<span>${shortTitle}</span><span class="opacity-75 font-mono text-[10px]">Card ${unit.cardIndex}</span>`;
+
+                pill.addEventListener('click', () => {
+                    setActiveCardVisual(unit.cardIndex, true);
+                    const targetCard = document.querySelector(`.cue-card[data-card-index="${unit.cardIndex}"]`);
+                    if (targetCard) {
+                        targetCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                });
+
+                unitNavBar.appendChild(pill);
+            });
+        }
+
+        // ==== 6. 核心排版引擎：將左側文稿切分為 A7 手卡並渲染至 A4 畫布 ====
+        function renderCards(options = {}) {
+            const { cursorCardIdx = null, cursorOffsetInCard = null, preserveScroll = true } = options;
+
+            const savedLeftScrollTop = inputArea.scrollTop;
+            const savedRightScrollTop = previewContainer.scrollTop;
+
+            const rawText = inputArea.value;
+            const lines = rawText.split('\n');
+
+            // 儲存切分後的每張卡片資料：{ text, startOffset, cardIndex }
+            const cardsData = [];
+            const detectedUnits = [];
+            cardStartOffsets = {};
+
+            let currentCardText = '';
+            let currentCardStartOffset = 0;
+            let runningOffset = 0;
+
+            const pushCurrentCard = () => {
+                if (currentCardText.trim().length > 0) {
+                    const newIdx = cardsData.length + 1;
+                    cardsData.push({
+                        cardIndex: newIdx,
+                        text: currentCardText,
+                        startOffset: currentCardStartOffset
+                    });
+                    cardStartOffsets[newIdx] = currentCardStartOffset;
+
+                    const firstLine = currentCardText.split('\n')[0].trim();
+                    if (isUnitTitleLine(firstLine)) {
+                        detectedUnits.push({
+                            title: firstLine,
+                            cardIndex: newIdx,
+                            charOffset: currentCardStartOffset
+                        });
+                    }
                 }
-                cardIndex++;
-                const card = document.createElement('div');
-                card.className = 'cue-card';
-                
-                // 專屬字體微調工具列
-                const toolbar = document.createElement('div');
-                toolbar.className = 'card-toolbar';
-                toolbar.contentEditable = "false";
-                const btnPlus = document.createElement('button');
-                btnPlus.textContent = 'A+';
-                btnPlus.onmousedown = (e) => { e.preventDefault(); }; // 避免搶走游標
-                btnPlus.onclick = () => { 
-                    customFontSizes[cardIndex] = (customFontSizes[cardIndex] || baseFontSize) + 2; 
-                    renderCards(); 
-                };
-                const btnMinus = document.createElement('button');
-                btnMinus.textContent = 'A-';
-                btnMinus.onmousedown = (e) => { e.preventDefault(); };
-                btnMinus.onclick = () => { 
-                    customFontSizes[cardIndex] = Math.max(12, (customFontSizes[cardIndex] || baseFontSize) - 2); 
-                    renderCards(); 
-                };
-                toolbar.appendChild(btnPlus);
-                toolbar.appendChild(btnMinus);
-                
-                const content = document.createElement('div');
-                content.className = 'card-content';
-                content.contentEditable = "true";
-                content.spellcheck = false;
-                content.style.fontSize = (customFontSizes[cardIndex] || baseFontSize) + 'px';
-                
-                const footer = document.createElement('div');
-                footer.className = 'card-footer';
-                footer.contentEditable = "false";
-                footer.textContent = `Card ${cardIndex}`;
-
-                card.appendChild(toolbar);
-                card.appendChild(content);
-                card.appendChild(footer);
-                currentPage.appendChild(card);
-                cardsOnPage++;
-                
-                return content;
-            }
-
-            let currentCard = createNewCard();
+                currentCardText = '';
+            };
 
             for (let i = 0; i < lines.length; i++) {
-                let line = lines[i];
-                let isForceBreak = /^([●【［\[])/.test(line.trim());
+                const line = lines[i];
+                const lineStartOffset = runningOffset;
+                runningOffset += line.length + 1; // +1 為 '\n'
 
-                // 遇到強制換頁標記，且當前卡片已有內容時，開新卡
-                if (isForceBreak && getElementTextLength(currentCard) > 0) {
-                    currentCard = createNewCard();
+                // 規則 A：空行 (兩個換行) -> 強制換新卡
+                if (line.trim() === '') {
+                    if (currentCardText.trim().length > 0) {
+                        pushCurrentCard();
+                    }
+                    currentCardStartOffset = runningOffset;
+                    continue;
                 }
 
-                if (line === '') {
-                    currentCard.appendChild(document.createElement('br'));
-                    // 若這行空行導致溢出，直接把空行移到下一頁
-                    if (isOverflow(currentCard)) {
-                        currentCard.lastChild.remove();
-                        currentCard = createNewCard();
-                        currentCard.appendChild(document.createElement('br'));
-                    }
-                } else {
-                    let remain = line;
-                    while (remain.length > 0) {
-                        let low = 1, high = remain.length, fitCount = 0;
-                        let testNode = document.createTextNode('');
-                        currentCard.appendChild(testNode);
-
-                        // 二元搜尋：尋找能在這張卡片塞下的最大字數
-                        while (low <= high) {
-                            let mid = Math.floor((low + high) / 2);
-                            testNode.textContent = remain.substring(0, mid);
-                            if (!isOverflow(currentCard)) {
-                                fitCount = mid;
-                                low = mid + 1; // 嘗試塞更多字
-                            } else {
-                                high = mid - 1; // 塞不下，字數減少
-                            }
-                        }
-                        
-                        if (fitCount === 0) {
-                            // 連一個字都塞不下
-                            testNode.remove();
-                            // 如果卡片本來是空的卻塞不下一個字 (字體過大)，強迫塞入以防無窮迴圈
-                            if (getElementTextLength(currentCard) === 0) {
-                                currentCard.appendChild(document.createTextNode(remain[0]));
-                                remain = remain.substring(1);
-                            }
-                            currentCard = createNewCard();
-                        } else {
-                            testNode.textContent = remain.substring(0, fitCount);
-                            remain = remain.substring(fitCount);
-                            if (remain.length > 0) {
-                                currentCard = createNewCard();
-                            }
-                        }
-                    }
+                // 規則 B：行首為 ●、［、[、【 -> 強制換新卡
+                if (isUnitTitleLine(line) && currentCardText.trim().length > 0) {
+                    pushCurrentCard();
+                    currentCardStartOffset = lineStartOffset;
                 }
 
-                // 補上段落結尾的換行 (除非是最後一段)
-                if (i < lines.length - 1) {
-                    currentCard.appendChild(document.createElement('br'));
-                    if (isOverflow(currentCard)) {
-                        currentCard.lastChild.remove();
-                        currentCard = createNewCard();
+                if (currentCardText === '') {
+                    currentCardStartOffset = lineStartOffset;
+                }
+
+                // 規則 C：字元級二元搜尋推延 (Character-level Smart Flow)
+                let remainingLine = line;
+                let consumedInLine = 0;
+
+                while (remainingLine.length > 0) {
+                    const upcomingCardIdx = cardsData.length + 1;
+                    const cardFontSize = customFontSizes[upcomingCardIdx] || baseFontSize;
+
+                    const fitCount = findMaxFittingChars(
+                        currentCardText,
+                        remainingLine,
+                        cardFontSize,
+                        upcomingCardIdx
+                    );
+
+                    if (fitCount === 0) {
+                        // 現有卡片已滿，先推入卡片，再把 remainingLine 放到下一張新卡
+                        pushCurrentCard();
+                        currentCardStartOffset = lineStartOffset + consumedInLine;
+                    } else if (fitCount < remainingLine.length) {
+                        // 部分字元塞得下，切出 fitCount 個字塞滿此卡，剩餘字元推到下一張新卡
+                        const fittingPart = remainingLine.slice(0, fitCount);
+                        currentCardText = currentCardText
+                            ? currentCardText + '\n' + fittingPart
+                            : fittingPart;
+                        pushCurrentCard();
+
+                        consumedInLine += fitCount;
+                        remainingLine = remainingLine.slice(fitCount);
+                        currentCardStartOffset = lineStartOffset + consumedInLine;
+                    } else {
+                        // 整行皆可塞入當前卡片
+                        currentCardText = currentCardText
+                            ? currentCardText + '\n' + remainingLine
+                            : remainingLine;
+                        remainingLine = '';
                     }
                 }
             }
 
-            // 補齊最後一頁 A4 剩餘的空格（印出裁切線所需）
-            while (cardsOnPage > 0 && cardsOnPage < 8) {
-                const emptyCard = document.createElement('div');
-                emptyCard.className = 'cue-card';
-                currentPage.appendChild(emptyCard);
-                cardsOnPage++;
+            if (currentCardText.trim().length > 0) {
+                pushCurrentCard();
             }
 
-            // ==== 還原游標位置 ====
-            if (cursorGlobalPos !== null) {
-                let cards = document.querySelectorAll('.card-content');
-                let currentLen = 0;
-                for (let card of cards) {
-                    let cardLen = getElementTextLength(card);
-                    if (cursorGlobalPos <= currentLen + cardLen) {
-                        setCursorInCard(card, cursorGlobalPos - currentLen);
-                        card.focus();
-                        return;
-                    }
-                    currentLen += cardLen;
+            // 若完全無內容，至少保留一張空白手卡供點擊輸入
+            if (cardsData.length === 0) {
+                cardsData.push({ cardIndex: 1, text: '', startOffset: 0 });
+                cardStartOffsets[1] = 0;
+            }
+
+            // 更新手卡總數標籤與導覽列
+            cardCountBadge.textContent = `共 ${cardsData.length} 張手卡`;
+            renderUnitNavBar(detectedUnits);
+
+            // 渲染 A4 頁面與八宮格手卡 DOM
+            previewContainer.innerHTML = '';
+            let currentA4Page = null;
+
+            cardsData.forEach((cardItem, idx) => {
+                if (idx % 8 === 0) {
+                    currentA4Page = document.createElement('div');
+                    currentA4Page.className = 'a4-page';
+                    previewContainer.appendChild(currentA4Page);
                 }
+
+                const thisCardIdx = cardItem.cardIndex;
+                const cardFontSize = customFontSizes[thisCardIdx] || baseFontSize;
+
+                const cardEl = document.createElement('div');
+                cardEl.className = `cue-card ${thisCardIdx === activeCardIndex ? 'active-card' : ''}`;
+                cardEl.dataset.cardIndex = thisCardIdx;
+
+                // 右上角單卡懸停微調工具列
+                const floatingToolbar = document.createElement('div');
+                floatingToolbar.className = 'card-floating-toolbar no-print';
+
+                const styleState = getCardTitleStyle(thisCardIdx);
+
+                floatingToolbar.innerHTML = `
+                    <button type="button" class="mini-btn ${styleState.bold ? 'active-style' : ''}" data-action="bold" title="切換此卡標題/選取文字加粗">B</button>
+                    <button type="button" class="mini-btn ${styleState.highlight ? 'active-style' : ''}" data-action="highlight" title="切換此卡標題/選取文字螢光筆">🖍️</button>
+                    <button type="button" class="mini-btn" data-action="clear" title="取消加粗及螢光筆">🧹</button>
+                    <span class="text-[10px] text-slate-300 mx-0.5">|</span>
+                    <button type="button" class="mini-btn" data-action="font-dec" title="縮小此張手卡字體 (-0.1px)">A-</button>
+                    <span class="text-[10px] font-mono font-bold text-slate-600 px-0.5">${formatFontSize(cardFontSize)}</span>
+                    <button type="button" class="mini-btn" data-action="font-inc" title="放大此張手卡字體 (+0.1px)">A+</button>
+                `;
+
+                // 工具列按鈕事件處理
+                floatingToolbar.addEventListener('mousedown', (e) => {
+                    // 防止點擊按鈕導致選取範圍消失或畫面亂跳
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const btn = e.target.closest('button[data-action]');
+                    if (!btn) return;
+                    const action = btn.dataset.action;
+                    handleCardToolbarAction(thisCardIdx, action);
+                });
+
+                // 手卡可編輯內容區
+                const contentEl = document.createElement('div');
+                contentEl.className = 'card-content';
+                contentEl.contentEditable = 'true';
+                contentEl.spellcheck = false;
+                contentEl.dataset.cardIndex = thisCardIdx;
+                contentEl.style.fontSize = `${cardFontSize}px`;
+                contentEl.innerHTML = buildCardInnerHTML(cardItem.text, thisCardIdx);
+
+                // 點擊卡片時聚焦並更新視覺外框（不強制跳動捲動條）
+                contentEl.addEventListener('mousedown', () => {
+                    if (activeCardIndex !== thisCardIdx) {
+                        setActiveCardVisual(thisCardIdx, false);
+                    }
+                });
+
+                // 右下角 Card N 頁碼
+                const pageNumEl = document.createElement('div');
+                pageNumEl.className = 'card-page-num';
+                pageNumEl.textContent = `Card ${thisCardIdx}`;
+
+                cardEl.appendChild(floatingToolbar);
+                cardEl.appendChild(contentEl);
+                cardEl.appendChild(pageNumEl);
+                currentA4Page.appendChild(cardEl);
+            });
+
+            // 若需要在重繪後還原游標位置
+            if (cursorCardIdx !== null && cursorOffsetInCard !== null) {
+                const targetContent = document.querySelector(`.card-content[data-card-index="${cursorCardIdx}"]`);
+                if (targetContent) {
+                    targetContent.focus({ preventScroll: true });
+                    setCursorInCard(targetContent, cursorOffsetInCard);
+                    setActiveCardVisual(cursorCardIdx, false);
+                }
+            }
+
+            if (preserveScroll) {
+                lockScrollPositions(savedLeftScrollTop, savedRightScrollTop);
             }
         }
 
-        // ==== 雙向編輯即時同步 ====
-        previewContainer.addEventListener('input', (e) => {
-            if (e.target.classList.contains('card-content')) {
-                let cards = document.querySelectorAll('.card-content');
-                let fullText = '';
-                let globalCursorPos = 0;
+        // ==== 7. 右側卡片雙向同步與不跳頁鎖定機制 ====
+        function syncRightCardsToTextarea() {
+            const savedLeftScrollTop = inputArea.scrollTop;
+            const savedRightScrollTop = previewContainer.scrollTop;
 
-                // 找尋當下游標位置對應的絕對字元位置
-                let sel = window.getSelection();
-                let activeCard = (sel.rangeCount > 0 && sel.anchorNode) 
-                    ? (sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentNode.closest('.card-content') : sel.anchorNode.closest('.card-content'))
-                    : null;
+            const cardContents = Array.from(document.querySelectorAll('.card-content'));
+            const cardTexts = cardContents.map((el) => extractTextFromCard(el).replace(/\n+$/, ''));
 
-                for (let card of cards) {
-                    if (card === activeCard) {
-                        globalCursorPos = fullText.length + getCursorOffsetInCard(card);
-                    }
-                    fullText += extractText(card);
-                }
+            // 以雙換行接合不同手卡，確保結構清晰同步回左側
+            const mergedScript = cardTexts.filter((t) => t.length > 0).join('\n\n');
+            inputArea.value = mergedScript;
 
-                inputArea.value = fullText;
-                
-                // 只有當前卡片溢出時才強制重繪，以節省效能；
-                // 由於我們改用字元級精準切割，只要溢位一發生，就會立刻推移後方版面並還原游標。
-                if (isOverflow(e.target) || e.inputType.includes('delete')) {
-                    renderCards(globalCursorPos);
-                }
+            lockScrollPositions(savedLeftScrollTop, savedRightScrollTop);
+        }
+
+        // 檢查卡片第 2 行之後是否新輸入了強制換卡符號 (●, ［, 【) 或連續空行
+        function hasInternalForceSplit(cardEl) {
+            const text = extractTextFromCard(cardEl);
+            if (text.includes('\n\n')) return true;
+            const lines = text.split('\n');
+            for (let i = 1; i < lines.length; i++) {
+                if (isUnitTitleLine(lines[i])) return true;
             }
+            return false;
+        }
+
+        // 若卡片第 1 行是標題，即時確保標題樣式套用而不重建整頁 DOM
+        function refreshFirstLineTitleStyleInPlace(cardEl) {
+            const cardIdx = parseInt(cardEl.dataset.cardIndex, 10);
+            const text = extractTextFromCard(cardEl);
+            const firstLine = text.split('\n')[0] || '';
+            const existingSpan = cardEl.querySelector('span[data-unit-title="true"]');
+
+            if (isUnitTitleLine(firstLine) && !existingSpan) {
+                const offset = getCursorOffsetInCard(cardEl);
+                cardEl.innerHTML = buildCardInnerHTML(text, cardIdx);
+                setCursorInCard(cardEl, offset);
+            }
+        }
+
+        // 監聽中文輸入法組字狀態，防止選字過程中重繪 DOM
+        previewContainer.addEventListener('compositionstart', () => {
+            isComposingIME = true;
         });
 
-        // ==== 首行 Backspace 跳轉前卡 ====
-        previewContainer.addEventListener('keydown', (e) => {
-            if (e.key === 'Backspace') {
-                let sel = window.getSelection();
-                if (!sel.isCollapsed) return; // 反白刪除時不干涉
+        previewContainer.addEventListener('compositionend', (e) => {
+            isComposingIME = false;
+            const cardEl = e.target.closest('.card-content');
+            if (!cardEl) return;
+            handleRightCardInput(cardEl);
+        });
 
-                let activeCard = e.target.closest('.card-content');
+        previewContainer.addEventListener('input', (e) => {
+            const cardEl = e.target.closest('.card-content');
+            if (!cardEl) return;
+            if (isComposingIME) {
+                // 組字期間僅同步左側純文字，絕不重繪右側卡片
+                syncRightCardsToTextarea();
+                return;
+            }
+            handleRightCardInput(cardEl);
+        });
+
+        function handleRightCardInput(cardEl) {
+            const savedLeftScrollTop = inputArea.scrollTop;
+            const savedRightScrollTop = previewContainer.scrollTop;
+
+            const cardIdx = parseInt(cardEl.dataset.cardIndex, 10);
+            const currentCursorOffset = getCursorOffsetInCard(cardEl);
+
+            // 1. 先將右側修改靜默同步回左側輸入框
+            syncRightCardsToTextarea();
+
+            // 2. 判斷是否超出當前卡片底部邊界、或輸入了新的 ●/［/【 換卡符號
+            const overflowed = isElementOverflowing(cardEl);
+            const forceSplitTriggered = hasInternalForceSplit(cardEl);
+
+            if (overflowed || forceSplitTriggered) {
+                // 觸發跨卡自動推延重排，並精準還原游標與捲動條位置
+                renderCards({
+                    cursorCardIdx: forceSplitTriggered ? cardIdx + 1 : cardIdx,
+                    cursorOffsetInCard: currentCursorOffset,
+                    preserveScroll: true
+                });
+                lockScrollPositions(savedLeftScrollTop, savedRightScrollTop);
+            } else {
+                // 一般打字/刪字：保持原卡片 DOM 100% 鎖定不重建，畫面零閃爍、零跳動
+                refreshFirstLineTitleStyleInPlace(cardEl);
+                lockScrollPositions(savedLeftScrollTop, savedRightScrollTop);
+            }
+        }
+
+        // 首行最前端按 Backspace 無縫跳回上一張手卡結尾
+        previewContainer.addEventListener('keydown', (e) => {
+            if (isComposingIME) return;
+            if (e.key === 'Backspace') {
+                const sel = window.getSelection();
+                if (!sel || !sel.isCollapsed) return;
+
+                const activeCard = e.target.closest('.card-content');
                 if (!activeCard) return;
 
-                let offset = getCursorOffsetInCard(activeCard);
+                const offset = getCursorOffsetInCard(activeCard);
                 if (offset === 0) {
-                    // 若在該卡片第一個字按下 Backspace，跳轉至上一張卡片結尾
-                    let cards = Array.from(document.querySelectorAll('.card-content'));
-                    let activeIndex = cards.indexOf(activeCard);
-                    if (activeIndex > 0) {
-                        e.preventDefault(); // 阻止刪除行為
-                        let prevCard = cards[activeIndex - 1];
-                        let prevLen = getElementTextLength(prevCard);
-                        prevCard.focus();
-                        setCursorInCard(prevCard, prevLen);
+                    const allCards = Array.from(document.querySelectorAll('.card-content'));
+                    const idx = allCards.indexOf(activeCard);
+                    if (idx > 0) {
+                        e.preventDefault();
+                        const savedLeftScrollTop = inputArea.scrollTop;
+                        const savedRightScrollTop = previewContainer.scrollTop;
+
+                        const prevCard = allCards[idx - 1];
+                        const prevTextLen = extractTextFromCard(prevCard).length;
+                        prevCard.focus({ preventScroll: true });
+                        setCursorInCard(prevCard, prevTextLen);
+                        setActiveCardVisual(parseInt(prevCard.dataset.cardIndex, 10), false);
+
+                        lockScrollPositions(savedLeftScrollTop, savedRightScrollTop);
                     }
                 }
             }
         });
 
-        // 初次渲染
-        renderCards();
+        // ==== 8. 加粗、螢光筆、取消樣式與單卡字級微調邏輯 ====
+        function applyInlineSelectionStyle(mode) {
+            const sel = window.getSelection();
+            if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return false;
+
+            const range = sel.getRangeAt(0);
+            const cardEl =
+                range.commonAncestorContainer.nodeType === Node.TEXT_NODE
+                    ? range.commonAncestorContainer.parentNode.closest('.card-content')
+                    : range.commonAncestorContainer.closest('.card-content');
+
+            if (!cardEl) return false;
+
+            if (mode === 'clear') {
+                // 移除選取範圍內的粗體與螢光筆標籤
+                const fragment = range.extractContents();
+                const cleanText = document.createTextNode(fragment.textContent);
+                range.insertNode(cleanText);
+                sel.removeAllRanges();
+                return true;
+            }
+
+            const wrapper = document.createElement('span');
+            if (mode === 'bold') wrapper.className = 'inline-bold';
+            if (mode === 'highlight') wrapper.className = 'inline-highlight';
+
+            wrapper.appendChild(range.extractContents());
+            range.insertNode(wrapper);
+            return true;
+        }
+
+        function handleCardToolbarAction(cardIdx, action) {
+            const savedLeftScrollTop = inputArea.scrollTop;
+            const savedRightScrollTop = previewContainer.scrollTop;
+            activeCardIndex = cardIdx;
+
+            if (action === 'font-inc' || action === 'font-dec') {
+                const currentSize = customFontSizes[cardIdx] !== undefined ? customFontSizes[cardIdx] : baseFontSize;
+                const delta = action === 'font-inc' ? 0.1 : -0.1;
+                const nextSize = Math.round((currentSize + delta) * 10) / 10;
+                customFontSizes[cardIdx] = Math.max(10.0, Math.min(40.0, nextSize));
+                renderCards({ preserveScroll: true });
+                lockScrollPositions(savedLeftScrollTop, savedRightScrollTop);
+                return;
+            }
+
+            // 先檢查使用者是否有在卡片內反白選取局部台詞
+            const handledInline = applyInlineSelectionStyle(action);
+            if (handledInline) {
+                lockScrollPositions(savedLeftScrollTop, savedRightScrollTop);
+                return;
+            }
+
+            // 若無反白局部文字，則針對該張手卡的「程序單元標題」進行切換
+            const currentStyle = { ...getCardTitleStyle(cardIdx) };
+            if (action === 'bold') {
+                currentStyle.bold = !currentStyle.bold;
+            } else if (action === 'highlight') {
+                currentStyle.highlight = !currentStyle.highlight;
+            } else if (action === 'clear') {
+                currentStyle.bold = false;
+                currentStyle.highlight = false;
+            }
+
+            cardTitleStyleMap[cardIdx] = currentStyle;
+            renderCards({ preserveScroll: true });
+            lockScrollPositions(savedLeftScrollTop, savedRightScrollTop);
+        }
+
+        // 右上角全域工具列按鈕事件
+        btnToggleBold.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            handleCardToolbarAction(activeCardIndex, 'bold');
+        });
+
+        btnToggleHighlight.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            handleCardToolbarAction(activeCardIndex, 'highlight');
+        });
+
+        btnClearFormatting.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            handleCardToolbarAction(activeCardIndex, 'clear');
+        });
+
+        btnGlobalAutoStyle.addEventListener('click', () => {
+            const turnOn = !(autoTitleBold && autoTitleHighlight);
+            autoTitleBold = turnOn;
+            autoTitleHighlight = turnOn;
+            cardTitleStyleMap = {}; // 清空個別覆寫，統一套用全域設定
+
+            btnGlobalAutoStyle.textContent = turnOn
+                ? '✨ 全部標題預設凸顯：開啟中'
+                : '✨ 全部標題預設凸顯：已關閉';
+            btnGlobalAutoStyle.className = turnOn
+                ? 'px-2.5 py-1 rounded text-xs font-semibold border border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100 transition cursor-pointer'
+                : 'px-2.5 py-1 rounded text-xs font-semibold border border-slate-300 bg-slate-100 text-slate-600 hover:bg-slate-200 transition cursor-pointer';
+
+            renderCards({ preserveScroll: true });
+        });
+
+        // 左側輸入框打字同步至右側（含捲動位置鎖定）
+        inputArea.addEventListener('input', () => {
+            renderCards({ preserveScroll: true });
+        });
+
+        // 全域預設字體大小滑桿 (0.1px 刻度)
+        globalFontSizeInput.addEventListener('input', (e) => {
+            baseFontSize = Math.round(parseFloat(e.target.value) * 10) / 10;
+            globalFontSizeVal.textContent = `${formatFontSize(baseFontSize)}px`;
+            renderCards({ preserveScroll: true });
+        });
+
+        // 重設單卡字級按鈕
+        resetCardFontsBtn.addEventListener('click', () => {
+            customFontSizes = {};
+            renderCards({ preserveScroll: true });
+        });
+
+        // 列印 / 匯出 PDF 按鈕
+        printBtn.addEventListener('click', () => {
+            window.print();
+        });
+
+        // ==== 初次載入渲染 ====
+        window.addEventListener('DOMContentLoaded', () => {
+            renderCards({ preserveScroll: false });
+        });
     </script>
-</body>
-</html>
+
+</body></html>
