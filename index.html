@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="zh-TW"><head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>手卡排版器 (A4八宮格 - 左右可調寬度版)</title>
+    <style>
+        :root {
+            --bg-color: #f1f5f9;
+            --panel-bg: #ffffff;
+            --border-color: #e2e8f0;
+            --text-main: #1e293b;
+            --a4-width: 210mm;
+            --a4-height: 297mm;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: "Helvetica Neue", Helvetica, "PingFang TC", "LiHei Pro", "Hiragino Sans GB", "Microsoft JhengHei", Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: grid;
+            /* 預設比例，中間 8px 是拖曳桿 */
+            grid-template-columns: 1fr 8px 1fr;
+            height: 100vh;
+        }
+
+        /* 拖曳桿樣式 */
+        .resizer {
+            background-color: #cbd5e1;
+            cursor: col-resize;
+            transition: background-color 0.2s;
+            z-index: 10;
+        }
+
+        .resizer:hover, .resizer:active {
+            background-color: #64748b;
+        }
+
+        /* 左側編輯區 */
+        .editor-panel {
+            background-color: var(--panel-bg);
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            padding: 20px;
+            overflow: hidden; /* 防止撐破 */
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .font-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        textarea {
+            flex-grow: 1;
+            resize: none;
+            padding: 15px;
+            font-size: 16px;
+            line-height: 1.6;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            outline: none;
+            font-family: inherit;
+        }
+
+        textarea:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        button {
+            background-color: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #2563eb;
+        }
+
+        /* 右側預覽區 */
+        .preview-panel {
+            padding: 30px;
+            overflow-y: auto;
+            background-color: #94a3b8;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .a4-page {
+            width: var(--a4-width);
+            height: var(--a4-height);
+            background-color: white;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            grid-template-rows: repeat(4, 1fr);
+            flex-shrink: 0;
+            position: relative;
+            /* 滿版列印，不留頁面邊距 */
+            padding: 0; 
+        }
+
+        .cue-card {
+            border-right: 1px dashed #cbd5e1;
+            border-bottom: 1px dashed #cbd5e1;
+            /* 預留極限列印安全邊距 */
+            padding: 8mm; 
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 去除最右側與最下方的虛線，避免印出多餘線條 */
+        .cue-card:nth-child(2n) { border-right: none; }
+        .cue-card:nth-child(7), .cue-card:nth-child(8) { border-bottom: none; }
+
+        .card-content {
+            flex-grow: 1;
+            overflow: hidden;
+            /* 字體大小由 JS 控制 */
+            line-height: 1.4; 
+            outline: none; /* 移除預設的 focus 邊框 */
+        }
+
+        /* 右側編輯時的發光效果 */
+        .card-content[contenteditable="true"]:focus {
+            background-color: rgba(255, 255, 255, 0.6);
+            box-shadow: inset 0 0 0 2px #3b82f6;
+            border-radius: 4px;
+        }
+
+        .card-footer {
+            text-align: right;
+            font-size: 10px;
+            color: #94a3b8;
+            margin-top: auto;
+            padding-top: 5px;
+        }
+
+        /* 列印專用樣式 */
+        @media print {
+            @page {
+                size: A4 portrait;
+                margin: 0; /* 滿版列印，去除預設邊界 */
+            }
+            body {
+                background: none;
+            }
+            .container {
+                display: block;
+                height: auto;
+                overflow: visible;
+            }
+            /* 隱藏不必要的元素 */
+            .editor-panel, .resizer {
+                display: none !important;
+            }
+            .preview-panel {
+                padding: 0;
+                background: none;
+                gap: 0;
+                overflow: visible;
+                display: block;
+            }
+            .a4-page {
+                box-shadow: none;
+                page-break-after: always;
+            }
+        }
+    </style>
+</head>
+<body style="cursor: default;">
+    <div class="container" id="main-container" style="grid-template-columns: 543px 8px 1fr;">
+        <!-- 左側編輯區 -->
+        <div class="editor-panel">
+            <div class="toolbar">
+                <div class="font-control">
+                    <label for="fontSizeSlider">基礎字級：<span id="fontSizeDisplay">24</span>px</label>
+                    <input type="range" id="fontSizeSlider" min="16" max="36" value="24">
+                </div>
+                <button onclick="window.print()">列印 / 匯出 PDF</button>
+            </div>
+            <textarea id="scriptInput" placeholder="請貼上講稿...
+只要段落開頭是 ［程序名稱］、[程序名稱] 或 【程序名稱】 就會自動換一張新卡片。">【原田會長賀詞】
+主持人A：大家好，首先為大家帶來原田會長的賀詞！
+
+［注意事項、題目三唱］
+司儀：大家(早/午/晚)安，歡迎大家前來參加○○地區友好總會！精彩節目即將開始，兩點注意事項在此提醒大家：
+1. 為使程序順利進行，請將手機調至震動或關機。
+2. 拍照時，請勿影響他人與程序進行。拍攝之照片或影片欲上傳，未經同意不可上傳含有可辨識當事人之照片。
+首先請___(職稱)___(姓名)帶領我們題目三唱。
+
+［司儀開場、未來部表演］
+(▲搭配主持人進場歌曲)
+A+B：大家好！
+A：歡迎來到○○地區友好總會，我是○○○。
+B：我是○○○，今天一進來看到好多熟面孔，還有很多第一次來的新朋友，大家聚在一起真的超級熱鬧！
+A：不知道大家剛剛有沒有到我們特別佈置的互動區逛逛、拍拍照呢？（▲有！）
+B：這次特別規劃了___(介紹互動區)___，希望大家感受到我們的熱情。
+A：大家剛剛都有加入創價的LINE官方帳號嗎？還來不及也沒關係，螢幕上有QR Code，請大家掃描加入！（▲請稍等參加人員掃描加入）
+B：謝謝大家！首先邀請最可愛的未來部小朋友們，帶來活力四射的演出。
+A+B：掌聲歡迎！
+
+［致歡迎詞］
+B：剛剛的表演精不精彩？（▲精彩！）再次謝謝這群可愛的小朋友們！
+A：接下來要迎接新年度的嶄新出發啦！今天我們___地區的大家長也盛裝打扮要跟大家見面了。
+B：掌聲歡迎最堅強可靠的○○地區黃金柱，地區部長___先生。
+A：以及最明朗的地區太陽，地區婦人部長___女士為大家致歡迎詞。
+A+B：請掌聲歡迎！
+
+［頒贈禮物］
+A：學會能不斷擴展，要歸功於會員無私付出。
+B：尤其每個月到聚點參加座談會，都能感受屋主的熱情！（▲是！）
+A：為了感謝屋主，學會特別以池田大作先生的攝影作品製作年曆。
+B：每幅都是池田先生對生命、大自然的熱愛。
+A：(▲投影) 1、2月英國倫敦，象徵世界和平。
+B：3、4月東京八王子櫻花，展現生命燦爛。
+A：5、6月日本福島湖畔，呈現大自然生命力。
+B：7、8月美國夏威夷沙灘，洋溢夏日活力。
+A：9、10月法國比耶夫雷市集，感受當地風情。
+B：11、12月東京八王子夕陽，感受深遠寧靜。
+A：哇！每一張都很漂亮耶！但最美的風景是屋主無私奉獻的笑容！
+B：現在我們請___(職稱/姓名)代表學會頒贈。
+A：請聚點提供者依唱名順序上台。
+(▲唱名、頒贈禮物)
+B：請大家面對攝影鏡頭，露出最燦爛的笑容。3.2.1.謝謝大家。
+A：請前輩及受獎者依引導回座。</textarea>
+        </div>
+
+        <!-- 中間拖曳調整桿 -->
+        <div class="resizer" id="resizer"></div>
+
+        <!-- 右側預覽區 -->
+        <div class="preview-panel" id="previewContainer"><div class="a4-page"><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">【原田會長賀詞】<br>主持人A：大家好，首先為大家帶來原田會長的賀詞！<br><br></div><div class="card-footer">Card 1</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">［注意事項、題目三唱］<br>司儀：大家(早/午/晚)安，歡迎大家前來參加○○地區友好總會！精彩節目即將開始，兩點注意事項在此提醒大家：<br></div><div class="card-footer">Card 2</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">1. 為使程序順利進行，請將手機調至震動或關機。<br>2. 拍照時，請勿影響他人與程序進行。拍攝之照片或影片欲上傳，未經同意不可上傳含有可辨識當事人之照片。<br></div><div class="card-footer">Card 3</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">首先請___(職稱)___(姓名)帶領我們題目三唱。<br><br></div><div class="card-footer">Card 4</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">［司儀開場、未來部表演］<br>(▲搭配主持人進場歌曲)<br>A+B：大家好！<br>A：歡迎來到○○地區友好總會，我是○○○。<br></div><div class="card-footer">Card 5</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">B：我是○○○，今天一進來看到好多熟面孔，還有很多第一次來的新朋友，大家聚在一起真的超級熱鬧！<br></div><div class="card-footer">Card 6</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">A：不知道大家剛剛有沒有到我們特別佈置的互動區逛逛、拍拍照呢？（▲有！）<br>B：這次特別規劃了___(介紹互動區)___，希望大家感受到我們的熱情。<br></div><div class="card-footer">Card 7</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">A：大家剛剛都有加入創價的LINE官方帳號嗎？還來不及也沒關係，螢幕上有QR Code，請大家掃描加入！（▲請稍等參加人員掃描加入）<br>B：謝謝大家！</div><div class="card-footer">Card 8</div></div></div><div class="a4-page"><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">首先邀請最可愛的未來部小朋友們，帶來活力四射的演出。<br>A+B：掌聲歡迎！<br><br></div><div class="card-footer">Card 9</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">［致歡迎詞］<br>B：剛剛的表演精不精彩？（▲精彩！）再次謝謝這群可愛的小朋友們！<br>A：接下來要迎接新年度的嶄新出發啦！</div><div class="card-footer">Card 10</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">今天我們___地區的大家長也盛裝打扮要跟大家見面了。<br>B：掌聲歡迎最堅強可靠的○○地區黃金柱，地區部長___先生。<br></div><div class="card-footer">Card 11</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">A：以及最明朗的地區太陽，地區婦人部長___女士為大家致歡迎詞。<br>A+B：請掌聲歡迎！<br><br></div><div class="card-footer">Card 12</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">［頒贈禮物］<br>A：學會能不斷擴展，要歸功於會員無私付出。<br>B：尤其每個月到聚點參加座談會，都能感受屋主的熱情！（▲是！）<br></div><div class="card-footer">Card 13</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">A：為了感謝屋主，學會特別以池田大作先生的攝影作品製作年曆。<br>B：每幅都是池田先生對生命、大自然的熱愛。<br></div><div class="card-footer">Card 14</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">A：(▲投影) 1、2月英國倫敦，象徵世界和平。<br>B：3、4月東京八王子櫻花，展現生命燦爛。<br>A：5、6月日本福島湖畔，呈現大自然生命力。<br></div><div class="card-footer">Card 15</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">B：7、8月美國夏威夷沙灘，洋溢夏日活力。<br>A：9、10月法國比耶夫雷市集，感受當地風情。<br>B：11、12月東京八王子夕陽，感受深遠寧靜。<br></div><div class="card-footer">Card 16</div></div></div><div class="a4-page"><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">A：哇！每一張都很漂亮耶！但最美的風景是屋主無私奉獻的笑容！<br>B：現在我們請___(職稱/姓名)代表學會頒贈。<br></div><div class="card-footer">Card 17</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">A：請聚點提供者依唱名順序上台。<br>(▲唱名、頒贈禮物)<br>B：請大家面對攝影鏡頭，露出最燦爛的笑容。3.2.1.謝謝大家。<br></div><div class="card-footer">Card 18</div></div><div class="cue-card"><div class="card-content" contenteditable="true" spellcheck="false" style="font-size: 24px; line-height: 1.4;">A：請前輩及受獎者依引導回座。<br></div><div class="card-footer">Card 19</div></div></div></div>
+    </div>
+
+    <script>
+        const inputArea = document.getElementById('scriptInput');
+        const previewContainer = document.getElementById('previewContainer');
+        const fontSizeSlider = document.getElementById('fontSizeSlider');
+        const fontSizeDisplay = document.getElementById('fontSizeDisplay');
+        const resizer = document.getElementById('resizer');
+        const mainContainer = document.getElementById('main-container');
+
+        // ==== 左右面板寬度拖曳邏輯 ====
+        let isResizing = false;
+
+        resizer.addEventListener('mousedown', (e) => {
+            isResizing = true;
+            document.body.style.cursor = 'col-resize';
+            e.preventDefault(); // 防止拖曳時選取文字
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (!isResizing) return;
+            const containerRect = mainContainer.getBoundingClientRect();
+            // 計算左側面板的新寬度
+            let newLeftWidth = e.clientX - containerRect.left;
+            
+            // 設定邊界限制 (避免面板縮到不見)
+            if (newLeftWidth < 200) newLeftWidth = 200;
+            if (newLeftWidth > containerRect.width - 300) newLeftWidth = containerRect.width - 300;
+            
+            mainContainer.style.gridTemplateColumns = `${newLeftWidth}px 8px 1fr`;
+        });
+
+        document.addEventListener('mouseup', () => {
+            if (isResizing) {
+                isResizing = false;
+                document.body.style.cursor = 'default';
+            }
+        });
+
+        // ==== 排版核心邏輯 ====
+
+        let baseFontSize = 24;
+        let globalCardCount = 0;
+
+        function updateFontSize() {
+            baseFontSize = parseInt(fontSizeSlider.value);
+            fontSizeDisplay.textContent = baseFontSize;
+            renderCards();
+        }
+
+        // 監聽輸入與設定變更
+        inputArea.addEventListener('input', renderCards);
+        fontSizeSlider.addEventListener('input', updateFontSize);
+
+        // ==== 雙向編輯同步邏輯 ====
+        // 當在右側預覽區直接輸入時，將內容同步回左側
+        previewContainer.addEventListener('input', (e) => {
+            if (e.target.classList.contains('card-content')) {
+                const allContents = document.querySelectorAll('.card-content');
+                const newText = Array.from(allContents)
+                    .map(c => c.innerText.trim())
+                    .filter(t => t.length > 0)
+                    .join('\n\n'); // 將各卡片內容合併回左側，保留分卡段落
+                inputArea.value = newText;
+            }
+        });
+
+        function createA4Page() {
+            const page = document.createElement('div');
+            page.className = 'a4-page';
+            previewContainer.appendChild(page);
+            return page;
+        }
+
+        function createCard(page) {
+            globalCardCount++;
+            const card = document.createElement('div');
+            card.className = 'cue-card';
+            
+            const content = document.createElement('div');
+            content.className = 'card-content';
+            content.contentEditable = "true"; // 開啟右側直接編輯
+            content.spellcheck = false;
+            content.style.fontSize = `${baseFontSize}px`;
+            // 不再縮小行距，保持固定比例
+            content.style.lineHeight = '1.4';
+            
+            const footer = document.createElement('div');
+            footer.className = 'card-footer';
+            footer.textContent = `Card ${globalCardCount}`;
+
+            card.appendChild(content);
+            card.appendChild(footer);
+            page.appendChild(card);
+            
+            return { card, content };
+        }
+
+        // 以標點符號作為斷句的切割正則表達式
+        const CHUNK_REGEX = /([。！？」\n]+)/g;
+
+        function renderCards() {
+            previewContainer.innerHTML = '';
+            globalCardCount = 0;
+
+            const text = inputArea.value;
+            // 處理換行，將兩個以上的換行視為一個空行
+            const lines = text.split('\n');
+            
+            let currentPage = createA4Page();
+            let cardsOnPage = 0;
+            
+            let { card, content } = createCard(currentPage);
+            cardsOnPage++;
+
+            for (let i = 0; i < lines.length; i++) {
+                let line = lines[i];
+
+                // 遇到 ［, [, 或 【 開頭，強制換卡
+                let trimmedLine = line.trim();
+                if (trimmedLine.startsWith('［') || trimmedLine.startsWith('[') || trimmedLine.startsWith('【')) {
+                    // 若當前卡片為空，則直接使用；若有內容，則開新卡
+                    if (content.innerHTML.trim() !== '') {
+                        if (cardsOnPage >= 8) {
+                            currentPage = createA4Page();
+                            cardsOnPage = 0;
+                        }
+                        const newElements = createCard(currentPage);
+                        card = newElements.card;
+                        content = newElements.content;
+                        cardsOnPage++;
+                    }
+                }
+
+                // 將該行文字切成一句一句
+                let segments = line.split(CHUNK_REGEX).filter(s => s !== '');
+                let buffer = "";
+
+                // 將切碎的句子重組 (文字 + 標點)
+                let sentences = [];
+                for(let j = 0; j < segments.length; j++) {
+                    if(segments[j].match(CHUNK_REGEX)) {
+                        if(sentences.length > 0) {
+                            sentences[sentences.length - 1] += segments[j];
+                        } else {
+                            sentences.push(segments[j]);
+                        }
+                    } else {
+                        sentences.push(segments[j]);
+                    }
+                }
+
+                if(sentences.length === 0) {
+                    // 處理空行，保留一點間距
+                    let originalHTML = content.innerHTML;
+                    content.innerHTML += '<br>';
+                    if (content.scrollHeight > content.clientHeight) {
+                        content.innerHTML = originalHTML; // 退回
+                        if (cardsOnPage >= 8) {
+                            currentPage = createA4Page();
+                            cardsOnPage = 0;
+                        }
+                        const newElements = createCard(currentPage);
+                        card = newElements.card;
+                        content = newElements.content;
+                        cardsOnPage++;
+                    }
+                    continue;
+                }
+
+                for (let sentence of sentences) {
+                    let textNodeHTML = sentence === '\n' ? '<br>' : sentence;
+                    
+                    let originalHTML = content.innerHTML;
+                    content.innerHTML += textNodeHTML;
+
+                    // 【核心邏輯】：如果加了這句導致溢位，把這句推到下一張卡
+                    if (content.scrollHeight > content.clientHeight) {
+                        content.innerHTML = originalHTML; // 復原上一張卡
+
+                        if (cardsOnPage >= 8) {
+                            currentPage = createA4Page();
+                            cardsOnPage = 0;
+                        }
+                        // 建立新卡片
+                        const newElements = createCard(currentPage);
+                        card = newElements.card;
+                        content = newElements.content;
+                        cardsOnPage++;
+
+                        // 將裝不下的這句放進新卡片
+                        content.innerHTML = textNodeHTML;
+                    }
+                }
+                
+                // 行尾補上斷行 (除非這行本來就是空的)
+                if (line !== '') {
+                    let originalHTML = content.innerHTML;
+                    content.innerHTML += '<br>';
+                    if (content.scrollHeight > content.clientHeight) {
+                        content.innerHTML = originalHTML;
+                        if (cardsOnPage >= 8) {
+                            currentPage = createA4Page();
+                            cardsOnPage = 0;
+                        }
+                        const newElements = createCard(currentPage);
+                        card = newElements.card;
+                        content = newElements.content;
+                        cardsOnPage++;
+                    }
+                }
+            }
+        }
+
+        // 初始化
+        updateFontSize();
+    </script>
+
+</body></html>
